@@ -33,18 +33,25 @@ def log_debug(message: str) -> None:
     """
     print(f"[DEBUG] {message}", file=sys.stderr)
 
-def format_tweet_message(username: str, tweet) -> str:
+def format_tweet_message(username: str, tweet, analysis_result: str = None) -> str:
     """
     Format a tweet for sending to Telegram.
     
     Args:
         username (str): The Twitter/X username
         tweet: A Tweet object with tweet_content and tweet_url
+        analysis_result (str, optional): AI analysis result to include
         
     Returns:
         str: Formatted message for Telegram
     """
-    return f"New tweet from @{username}:\n\n{tweet.tweet_content}\n\n{tweet.tweet_url}"
+    message = f"New tweet from @{username}:\n\n{tweet.tweet_content}\n\n{tweet.tweet_url}"
+    
+    # Add AI analysis if provided
+    if analysis_result:
+        message += f"\n\n<b>AI Analysis:</b> {analysis_result}"
+    
+    return message
 
 def format_timestamp(dt: datetime) -> str:
     """

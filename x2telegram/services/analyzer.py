@@ -141,8 +141,7 @@ class AnalyzerService:
                         {"role": "system", "content": "You are an analyzer that evaluates content."},
                         {"role": "user", "content": f"{prompt}\n\nTweet: {text}"}
                     ],
-                    "stream": False,
-                    "format": "json"
+                    "stream": False
                 }
                 
                 log_info(f"Analyzing tweet with Ollama using model {self.ollama_model}")
@@ -157,55 +156,25 @@ class AnalyzerService:
                 if response.status_code == 200:
                     result = response.json()
                     
-                    # Parse the response 
-                    try:
-                        message_content = result.get("message", {}).get("content", "{}")
-                        # Try to parse as JSON, but handle cases where the response might not be perfectly formatted JSON
-                        try:
-                            ai_result = json.loads(message_content)
-                        except json.JSONDecodeError:
-                            # If raw response isn't valid JSON, look for JSON pattern in the response
-                            import re
-                            json_match = re.search(r'\{.*\}', message_content, re.DOTALL)
-                            if json_match:
-                                try:
-                                    ai_result = json.loads(json_match.group(0))
-                                except json.JSONDecodeError:
-                                    # Last resort: create our own analysis based on keywords
-                                    is_relevant = any(kw in message_content.lower() for kw in 
-                                                    ['relevant', 'important', 'interesting', 'news', 'announcement'])
-                                    ai_result = {
-                                        "is_relevant": is_relevant,
-                                        "reason": message_content[:200] + "..."  # Truncated response
-                                    }
-                            else:
-                                # Create a basic result if no JSON found
-                                is_relevant = any(kw in message_content.lower() for kw in 
-                                                ['relevant', 'important', 'interesting', 'news', 'announcement'])
-                                ai_result = {
-                                    "is_relevant": is_relevant,
-                                    "reason": message_content[:200] + "..."  # Truncated response
-                                }
-                    except Exception as parse_error:
-                        log_error(f"Error parsing Ollama response: {str(parse_error)}")
-                        ai_result = {"is_relevant": False, "reason": "Error parsing response"}
+                    # Get the plain text response
+                    message_content = result.get("message", {}).get("content", "")
+                    
+                    # Remove any thinking sections from the response
+                    analysis = self._remove_thinking_section(message_content)
                     
                     total_duration = time.time() - start_time
-                    log_debug(f"Ollama analysis result: {ai_result}")
+                    log_debug(f"Ollama analysis: {analysis}")
                     log_info(f"Total analysis time: {total_duration:.2f} seconds (including {retry_count} retries)")
                     
                     return {
-                        "is_relevant": ai_result.get("is_relevant", False),
-                        "reason": ai_result.get("reason", "No reason provided"),
-                        "confidence": 1.0,  # Ollama doesn't provide confidence scores
-                        "raw_response": ai_result,
+                        "analysis": analysis,
                         "response_time": request_duration,
                         "total_analysis_time": total_duration
                     }
                 elif response.status_code == 404:
                     # Model not found
                     log_error(f"Model {self.ollama_model} not found in Ollama. Try pulling it first.")
-                    return {"error": f"Model {self.ollama_model} not found", "is_relevant": False, "confidence": 0.0}
+                    return {"error": f"Model {self.ollama_model} not found", "analysis": "Error: Model not found"}
                 elif response.status_code >= 500:
                     # Server error, retry
                     log_error(f"Ollama server error (status: {response.status_code}). Retrying in {retry_delay} seconds...")
@@ -222,14 +191,12 @@ class AnalyzerService:
                         log_error(f"Ollama failed after {total_duration:.2f} seconds with {max_retries} retries")
                         return {
                             "error": f"Ollama server error after {max_retries} retries", 
-                            "is_relevant": False, 
-                            "confidence": 0.0,
-                            "total_analysis_time": total_duration
+                            "analysis": "Error: Server error"
                         }
                 else:
                     # Other errors
                     log_error(f"Ollama request failed with status {response.status_code}: {response.text}")
-                    return {"error": f"Request failed with status {response.status_code}", "is_relevant": False, "confidence": 0.0}
+                    return {"error": f"Request failed with status {response.status_code}", "analysis": "Error: Request failed"}
                 
             except requests.Timeout:
                 log_error(f"Ollama request timed out after {timeout} seconds. Retrying...")
@@ -244,9 +211,7 @@ class AnalyzerService:
                     log_error(f"Ollama timed out after {total_duration:.2f} seconds with {max_retries} retries")
                     return {
                         "error": f"Timeout after {max_retries} retries", 
-                        "is_relevant": False, 
-                        "confidence": 0.0,
-                        "total_analysis_time": total_duration
+                        "analysis": "Error: Request timed out"
                     }
             
             except requests.ConnectionError:
@@ -263,9 +228,7 @@ class AnalyzerService:
                     log_error(f"Connection errors persisted for {total_duration:.2f} seconds with {max_retries} retries")
                     return {
                         "error": f"Connection error after {max_retries} retries", 
-                        "is_relevant": False, 
-                        "confidence": 0.0,
-                        "total_analysis_time": total_duration
+                        "analysis": "Error: Connection failed"
                     }
                 
             except Exception as e:
@@ -278,9 +241,7 @@ class AnalyzerService:
                     total_duration = time.time() - start_time
                     return {
                         "error": str(e), 
-                        "is_relevant": False, 
-                        "confidence": 0.0,
-                        "total_analysis_time": total_duration
+                        "analysis": f"Error: {str(e)}"
                     }
     
     def analyze_with_groq(self, text: str, prompt: str = None) -> Dict[str, Any]:
@@ -296,7 +257,7 @@ class AnalyzerService:
         """
         if not self.api_key:
             log_error("No GROQ API key provided for AI analysis")
-            return {"error": "No API key", "is_relevant": False, "confidence": 0.0}
+            return {"error": "No API key", "analysis": "Error: No API key configured"}
             
         # Use the environment-based prompt if none provided
         if not prompt:
@@ -314,28 +275,30 @@ class AnalyzerService:
                     {"role": "system", "content": "You are an analyzer that evaluates content."},
                     {"role": "user", "content": f"{prompt}\n\nTweet: {text}"}
                 ],
-                "temperature": 0.3,
-                "response_format": {"type": "json_object"}
+                "temperature": 0.3
+                # Removed response_format to get plain text instead of JSON
             }
             
             response = requests.post(url, headers=headers, json=payload, timeout=15)
             response.raise_for_status()
             result = response.json()
             
-            # Parse the JSON response
-            ai_response = result.get("choices", [{}])[0].get("message", {}).get("content", "{}")
-            ai_result = json.loads(ai_response)
+            # Get the plain text response
+            message_content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+            
+            # Remove any thinking sections from the response
+            analysis = self._remove_thinking_section(message_content)
+            
+            log_debug(f"Groq analysis: {analysis}")
             
             return {
-                "is_relevant": ai_result.get("is_relevant", False),
-                "reason": ai_result.get("reason", "No reason provided"),
-                "confidence": 1.0,  # Groq doesn't provide confidence, so we use 1.0 for now
-                "raw_response": ai_result
+                "analysis": analysis,
+                "response_time": 0.0  # Groq doesn't provide timing info
             }
             
         except Exception as e:
             log_error(f"Error in GROQ analysis: {str(e)}")
-            return {"error": str(e), "is_relevant": False, "confidence": 0.0}
+            return {"error": str(e), "analysis": f"Error: {str(e)}"}
     
     def analyze_with_ai(self, text: str, prompt: str = None) -> Dict[str, Any]:
         """
@@ -343,10 +306,10 @@ class AnalyzerService:
         
         Args:
             text (str): Text to analyze
-            prompt (str, optional): Custom prompt for the AI. Defaults to a generic relevance prompt.
+            prompt (str, optional): Custom prompt for the AI.
             
         Returns:
-            dict: AI analysis results
+            dict: AI analysis results with plain text analysis
         """
         if self.provider.lower() == 'ollama':
             log_info("Using Ollama for tweet analysis")
@@ -355,45 +318,56 @@ class AnalyzerService:
             log_info("Using GROQ for tweet analysis")
             return self.analyze_with_groq(text, prompt)
     
-    def analyze_tweet(self, tweet_content: str, use_ai: bool = False, custom_prompt: str = None) -> bool:
+    def analyze_tweet(self, tweet_content: str, use_ai: bool = True, custom_prompt: str = None) -> Dict[str, Any]:
         """
-        Analyze a tweet to determine if it's relevant.
+        Analyze a tweet and return the analysis.
         
         Args:
             tweet_content (str): Tweet content
-            use_ai (bool, optional): Whether to use AI analysis. Defaults to False.
+            use_ai (bool, optional): Whether to use AI analysis. Defaults to True.
             custom_prompt (str, optional): Custom prompt for AI analysis. Defaults to None.
             
         Returns:
-            bool: True if the tweet is relevant, False otherwise
+            dict: Analysis results containing the analysis text
         """
-        # First, check keyword filters
-        keyword_result = self.analyze_with_keywords(tweet_content)
-        
-        # If not using AI, return the keyword result
+        # If not using AI, return a simple message
         if not use_ai:
-            return keyword_result
+            return {"analysis": "No AI analysis performed"}
             
-        # If we're using AI, pass it to the AI service
-        if keyword_result:
-            # Only use AI if keyword filters say it's relevant
-            ai_result = self.analyze_with_ai(tweet_content, custom_prompt)
-            is_relevant = ai_result.get("is_relevant", False)
-            confidence = ai_result.get("confidence", 0.0)
-            reason = ai_result.get("reason", "No reason provided")
-            
-            log_info(f"AI analysis result: {is_relevant} (confidence: {confidence})")
-            log_debug(f"AI reason: {reason}")
-            
-            # Return True if AI agrees with confidence above threshold
-            return is_relevant and confidence >= self.threshold
+        # Use AI to analyze the tweet
+        ai_result = self.analyze_with_ai(tweet_content, custom_prompt)
         
-        # If keyword filters determined it's not relevant, don't waste API calls
-        return False
+        # Log the analysis
+        analysis = ai_result.get("analysis", "No analysis provided")
+        log_info(f"AI analysis completed")
+        log_debug(f"AI analysis: {analysis}")
+        
+        return ai_result
+
+    def _remove_thinking_section(self, text):
+        """
+        Remove any thinking sections from the AI response.
+        
+        Args:
+            text (str): The AI response text
+            
+        Returns:
+            str: The response with thinking sections removed
+        """
+        # Check if the text contains a thinking section
+        thinking_pattern = r'<think>.*?</think>'
+        text = re.sub(thinking_pattern, '', text, flags=re.DOTALL)
+        
+        # Remove any remaining tags that might be present
+        text = re.sub(r'<[^>]+>', '', text)
+        
+        # Clean up any extra whitespace that might be left
+        text = re.sub(r'\s+', ' ', text).strip()
+        
+        return text
 
 # For backward compatibility
 def analyze_tweet(tweet_content):
     """Analyze a tweet (convenience function for backward compatibility)."""
     analyzer = AnalyzerService()
-    analyzer.add_keyword_filter("crypto", True)  # Original implementation checked for "crypto"
-    return analyzer.analyze_tweet(tweet_content)
+    return analyzer.analyze_tweet(tweet_content).get("analysis", "No analysis available")

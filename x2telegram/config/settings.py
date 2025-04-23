@@ -30,10 +30,10 @@ AI_PROVIDER = os.environ.get("AI_PROVIDER", "ollama")
 
 # AI analysis prompts
 DEFAULT_AI_PROMPT = (
-    "Analyze the following tweet and determine if it contains important or interesting "
-    "information. The tweet should be relevant if it contains news, announcements, "
-    "or significant insights. Respond with a JSON object with two fields: "
-    "'is_relevant' (boolean) and 'reason' (string explanation)."
+    "Analyze the following tweet and provide a brief, thoughtful comment about it. "
+    "Keep your response short and to the point - no more than 1-2 sentences. "
+    "Do not include any thinking process or explanations of your reasoning. "
+    "Simply provide your final analysis directly."
 )
 AI_PROMPT = os.environ.get("AI_PROMPT", DEFAULT_AI_PROMPT)
 # Provider-specific prompts (optional - if not set, AI_PROMPT will be used)
