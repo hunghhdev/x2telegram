@@ -33,14 +33,14 @@ class RSSService:
     now uses direct HTML scraping instead of RSS feeds.
     """
     
-    def __init__(self, mirrors=None, timeout=15, retry_count=5):
+    def __init__(self, mirrors=None, timeout=60, retry_count=10):
         """
         Initialize the scraping service.
         
         Args:
             mirrors (list, optional): List of Nitter mirror URLs. Defaults to configured mirrors.
-            timeout (int, optional): Timeout for web requests in seconds. Defaults to 15.
-            retry_count (int, optional): Maximum number of retry attempts. Defaults to 5.
+            timeout (int, optional): Timeout for web requests in seconds. Defaults to 60.
+            retry_count (int, optional): Maximum number of retry attempts. Defaults to 10.
         """
         # Use configured mirrors from settings
         self.mirrors = mirrors or NITTER_MIRRORS
