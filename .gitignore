@@ -1,0 +1,12 @@
+.devcontainer
+.github
+.venv
+.vscode.example
+tools
+.cursorignore
+.env
+README_devin.cursorrules.md
+requirements-devin.txt
+
+# Database
+data
