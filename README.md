@@ -14,6 +14,7 @@ x2telegram monitors Twitter/X profiles through RSS feeds provided by Nitter inst
 - Command-line interface for easy management
 - SQLite database for persistent storage
 - Resilient RSS fetching with multiple Nitter mirrors
+- Customizable AI analysis prompts for tailored relevance detection
 
 ## Project Structure
 
@@ -76,6 +77,31 @@ Create a `.env` file based on `.env.example` with the following parameters:
 - `GROQ_API_KEY`: (Optional) API key for AI-based analysis
 - `MAX_TWEETS_PER_USER`: Maximum number of tweets to process per user
 - `NITTER_MIRRORS`: (Optional) JSON array of custom Nitter instance URLs
+
+### AI Configuration
+
+The app supports two AI providers for tweet analysis:
+
+1. **Ollama** (default, locally-hosted): 
+   - `OLLAMA_URL`: URL for the Ollama API server (default: http://localhost:11434)
+   - `OLLAMA_MODEL`: Model to use with Ollama (default: deepseek-r1)
+
+2. **Groq** (cloud-based):
+   - `GROQ_API_KEY`: Your Groq API key
+   - Set `AI_PROVIDER=groq` to use Groq instead of Ollama
+
+### AI Prompt Customization
+
+You can customize the prompts used for AI analysis:
+
+- `AI_PROMPT`: General prompt for all AI providers
+- `OLLAMA_PROMPT`: Specific prompt for Ollama (overrides AI_PROMPT)
+- `GROQ_PROMPT`: Specific prompt for Groq (overrides AI_PROMPT)
+
+Example:
+```
+AI_PROMPT="Analyze this tweet and determine if it contains news or announcements. Respond with JSON {is_relevant: boolean, reason: string}"
+```
 
 ## Usage
 
