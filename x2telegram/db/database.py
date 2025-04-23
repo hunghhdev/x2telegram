@@ -26,6 +26,12 @@ class Database:
             if self.db_path != ":memory:":
                 # Ensure the directory exists
                 os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+                
+                # For SQLite, just connecting to the database will create it if it doesn't exist
+                # Log whether we're creating a new file or connecting to existing one
+                file_exists = os.path.exists(self.db_path)
+                if not file_exists:
+                    print(f"Database file does not exist, will be created: {self.db_path}", file=sys.stderr)
             
             self.conn = sqlite3.connect(self.db_path)
             print(f"Connected to database: {self.db_path}", file=sys.stderr)
