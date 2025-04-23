@@ -27,6 +27,18 @@ OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "deepseek-r1")
 # Set to "ollama" to use locally hosted Ollama models instead of GROQ
 AI_PROVIDER = os.environ.get("AI_PROVIDER", "ollama")
 
+# AI analysis prompts
+DEFAULT_AI_PROMPT = (
+    "Analyze the following tweet and determine if it contains important or interesting "
+    "information. The tweet should be relevant if it contains news, announcements, "
+    "or significant insights. Respond with a JSON object with two fields: "
+    "'is_relevant' (boolean) and 'reason' (string explanation)."
+)
+AI_PROMPT = os.environ.get("AI_PROMPT", DEFAULT_AI_PROMPT)
+# Provider-specific prompts (optional - if not set, AI_PROMPT will be used)
+OLLAMA_PROMPT = os.environ.get("OLLAMA_PROMPT", AI_PROMPT)
+GROQ_PROMPT = os.environ.get("GROQ_PROMPT", AI_PROMPT)
+
 # Processing settings
 MAX_TWEETS_PER_USER = int(os.environ.get("MAX_TWEETS_PER_USER", "10"))
 

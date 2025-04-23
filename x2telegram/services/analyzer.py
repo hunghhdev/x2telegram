@@ -9,7 +9,10 @@ import time
 import random  # Added missing import for random module
 from typing import Dict, Any, List, Optional, Union, Callable
 
-from ..config import GROQ_API_KEY, OLLAMA_URL, OLLAMA_MODEL, AI_PROVIDER
+from ..config import (
+    GROQ_API_KEY, OLLAMA_URL, OLLAMA_MODEL, AI_PROVIDER,
+    AI_PROMPT, OLLAMA_PROMPT, GROQ_PROMPT
+)
 from ..utils import log_info, log_error, log_debug
 
 class AnalyzerService:
@@ -112,7 +115,7 @@ class AnalyzerService:
         
         Args:
             text (str): Text to analyze
-            prompt (str, optional): Custom prompt for the AI. Defaults to a generic relevance prompt.
+            prompt (str, optional): Custom prompt for the AI. Defaults to the value from environment settings.
             max_retries (int): Maximum number of retry attempts (default: 3)
             retry_delay (int): Delay between retries in seconds (default: 2)
             timeout (int): Request timeout in seconds (default: 30)
@@ -120,14 +123,9 @@ class AnalyzerService:
         Returns:
             dict: AI analysis results
         """
-        # Default prompt if none provided
+        # Use the environment-based prompt if none provided
         if not prompt:
-            prompt = (
-                "Analyze the following tweet and determine if it contains important or interesting "
-                "information. The tweet should be relevant if it contains news, announcements, "
-                "or significant insights. Respond with a JSON object with two fields: "
-                "'is_relevant' (boolean) and 'reason' (string explanation)."
-            )
+            prompt = OLLAMA_PROMPT
             
         retry_count = 0
         start_time = time.time()
@@ -291,7 +289,7 @@ class AnalyzerService:
         
         Args:
             text (str): Text to analyze
-            prompt (str, optional): Custom prompt for the AI. Defaults to a generic relevance prompt.
+            prompt (str, optional): Custom prompt for the AI. Defaults to the value from environment settings.
             
         Returns:
             dict: AI analysis results
@@ -300,14 +298,9 @@ class AnalyzerService:
             log_error("No GROQ API key provided for AI analysis")
             return {"error": "No API key", "is_relevant": False, "confidence": 0.0}
             
-        # Default prompt if none provided
+        # Use the environment-based prompt if none provided
         if not prompt:
-            prompt = (
-                "Analyze the following tweet and determine if it contains important or interesting "
-                "information. The tweet should be relevant if it contains news, announcements, "
-                "or significant insights. Respond with a JSON object with two fields: "
-                "'is_relevant' (boolean) and 'reason' (string explanation)."
-            )
+            prompt = GROQ_PROMPT
             
         try:
             url = "https://api.groq.com/openai/v1/chat/completions"

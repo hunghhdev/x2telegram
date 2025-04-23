@@ -12,6 +12,9 @@ from .settings import (
     OLLAMA_URL,
     OLLAMA_MODEL,
     AI_PROVIDER,
+    AI_PROMPT,
+    OLLAMA_PROMPT,
+    GROQ_PROMPT,
     MAX_TWEETS_PER_USER,
     NITTER_MIRRORS
 )
@@ -26,6 +29,9 @@ __all__ = [
     'OLLAMA_URL',
     'OLLAMA_MODEL',
     'AI_PROVIDER',
+    'AI_PROMPT',
+    'OLLAMA_PROMPT',
+    'GROQ_PROMPT',
     'MAX_TWEETS_PER_USER',
     'NITTER_MIRRORS'
 ]
