@@ -6,12 +6,13 @@ import requests
 import json
 import os
 import time
-import random  # Added missing import for random module
+import random
 from typing import Dict, Any, List, Optional, Union, Callable
 
 from ..config import (
-    GROQ_API_KEY, OLLAMA_URL, OLLAMA_MODEL, AI_PROVIDER,
-    AI_PROMPT, OLLAMA_PROMPT, GROQ_PROMPT
+    CLAUDE_API_KEY, OLLAMA_URL, OLLAMA_MODEL, 
+    AI_PROVIDER, CLAUDE_MODEL,
+    AI_PROMPT, OLLAMA_PROMPT, CLAUDE_PROMPT
 )
 from ..utils import log_info, log_error, log_debug
 
@@ -23,15 +24,22 @@ class AnalyzerService:
         Initialize the analyzer service.
         
         Args:
-            api_key (str, optional): API key for cloud AI services. Defaults to config value.
+            api_key (str, optional): API key for cloud AI services. Defaults to config value based on provider.
             threshold (float, optional): Confidence threshold for AI analysis. Defaults to 0.7.
-            provider (str, optional): AI provider to use ('groq', 'ollama'). Defaults to config value.
+            provider (str, optional): AI provider to use ('claude', 'ollama'). Defaults to config value.
             ollama_url (str, optional): URL for Ollama API. Defaults to config value.
             ollama_model (str, optional): Model to use with Ollama. Defaults to config value.
         """
-        self.api_key = api_key or GROQ_API_KEY
-        self.threshold = threshold
         self.provider = provider or AI_PROVIDER
+        
+        # Set the API key based on the provider
+        if self.provider.lower() == 'claude':
+            self.api_key = api_key or CLAUDE_API_KEY
+        else:
+            # Default for Ollama (doesn't use API key, but keeping for consistency)
+            self.api_key = api_key
+            
+        self.threshold = threshold
         self.ollama_url = ollama_url or OLLAMA_URL
         self.ollama_model = ollama_model or OLLAMA_MODEL
         self.keyword_filters = []
@@ -244,81 +252,145 @@ class AnalyzerService:
                         "analysis": f"Error: {str(e)}"
                     }
     
-    def analyze_with_groq(self, text: str, prompt: str = None) -> Dict[str, Any]:
+    def analyze_with_claude(self, text: str, prompt: str = None, image_url: str = None) -> Dict[str, Any]:
         """
-        Analyze text using Groq AI.
+        Analyze text using Claude AI (Anthropic), optionally including an image.
         
         Args:
             text (str): Text to analyze
             prompt (str, optional): Custom prompt for the AI. Defaults to the value from environment settings.
+            image_url (str, optional): URL of an image to include in the analysis. Defaults to None.
             
         Returns:
             dict: AI analysis results
         """
         if not self.api_key:
-            log_error("No GROQ API key provided for AI analysis")
+            log_error("No Anthropic/Claude API key provided for AI analysis")
             return {"error": "No API key", "analysis": "Error: No API key configured"}
             
         # Use the environment-based prompt if none provided
         if not prompt:
-            prompt = GROQ_PROMPT
+            prompt = CLAUDE_PROMPT
             
         try:
-            url = "https://api.groq.com/openai/v1/chat/completions"
+            url = "https://api.anthropic.com/v1/messages"
             headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
+                "x-api-key": self.api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json"
             }
+            
+            # Prepare the content section based on whether we have an image
+            content = []
+            
+            # First part is always the text prompt
+            content.append({
+                "type": "text",
+                "text": f"{prompt}\n\nTweet: {text}"
+            })
+            
+            # If an image URL is provided, download and include it
+            if image_url:
+                try:
+                    log_info(f"Downloading tweet image from: {image_url}")
+                    image_response = requests.get(image_url, timeout=10)
+                    image_response.raise_for_status()
+                    
+                    # Get image mime type from response headers or infer from URL
+                    content_type = image_response.headers.get('Content-Type')
+                    if not content_type or not content_type.startswith('image/'):
+                        if image_url.lower().endswith('.jpg') or image_url.lower().endswith('.jpeg'):
+                            content_type = 'image/jpeg'
+                        elif image_url.lower().endswith('.png'):
+                            content_type = 'image/png'
+                        elif image_url.lower().endswith('.gif'):
+                            content_type = 'image/gif'
+                        elif image_url.lower().endswith('.webp'):
+                            content_type = 'image/webp'
+                        else:
+                            content_type = 'image/jpeg'  # Default to jpeg
+                    
+                    # Encode the image as base64
+                    import base64
+                    image_data = base64.b64encode(image_response.content).decode('utf-8')
+                    
+                    # Add the image to the content
+                    content.append({
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": content_type,
+                            "data": image_data
+                        }
+                    })
+                    
+                    log_info("Successfully added image to Claude API request")
+                    
+                except Exception as e:
+                    log_error(f"Error downloading or processing image: {str(e)}")
+                    # Continue with text-only analysis if image processing fails
+                    log_info("Continuing with text-only analysis")
+            
             payload = {
-                "model": "llama3-8b-8192",
+                "model": CLAUDE_MODEL,
                 "messages": [
-                    {"role": "system", "content": "You are an analyzer that evaluates content."},
-                    {"role": "user", "content": f"{prompt}\n\nTweet: {text}"}
+                    {"role": "user", "content": content}
                 ],
+                "max_tokens": 300,
                 "temperature": 0.3
-                # Removed response_format to get plain text instead of JSON
             }
             
             response = requests.post(url, headers=headers, json=payload, timeout=15)
             response.raise_for_status()
             result = response.json()
             
-            # Get the plain text response
-            message_content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+            # Get the plain text response from Claude's response format
+            message_content = result.get("content", [{}])[0].get("text", "")
             
             # Remove any thinking sections from the response
             analysis = self._remove_thinking_section(message_content)
             
-            log_debug(f"Groq analysis: {analysis}")
+            log_debug(f"Claude analysis: {analysis}")
             
             return {
                 "analysis": analysis,
-                "response_time": 0.0  # Groq doesn't provide timing info
+                "response_time": 0.0,  # Claude doesn't provide timing info
+                "includes_image": image_url is not None
             }
             
         except Exception as e:
-            log_error(f"Error in GROQ analysis: {str(e)}")
+            log_error(f"Error in Claude analysis: {str(e)}")
             return {"error": str(e), "analysis": f"Error: {str(e)}"}
-    
-    def analyze_with_ai(self, text: str, prompt: str = None) -> Dict[str, Any]:
+            
+    def analyze_with_ai(self, text: str, prompt: str = None, image_url: str = None) -> Dict[str, Any]:
         """
-        Analyze text using AI.
+        Analyze text using AI, optionally with an image for Claude provider.
         
         Args:
             text (str): Text to analyze
             prompt (str, optional): Custom prompt for the AI.
+            image_url (str, optional): URL of an image to include in the analysis (Claude only).
             
         Returns:
             dict: AI analysis results with plain text analysis
         """
         if self.provider.lower() == 'ollama':
             log_info("Using Ollama for tweet analysis")
+            # Ollama doesn't support image analysis, so we ignore the image_url
+            if image_url:
+                log_info("Image analysis not supported by Ollama, analyzing text only")
             return self.analyze_with_ollama(text, prompt)
+        elif self.provider.lower() == 'claude':
+            log_info("Using Claude for tweet analysis")
+            if image_url:
+                log_info(f"Including image in Claude analysis: {image_url}")
+            return self.analyze_with_claude(text, prompt, image_url)
         else:
-            log_info("Using GROQ for tweet analysis")
-            return self.analyze_with_groq(text, prompt)
+            # Default to Ollama if provider is not recognized
+            log_info(f"Unknown provider '{self.provider}', defaulting to Ollama for tweet analysis")
+            return self.analyze_with_ollama(text, prompt)
     
-    def analyze_tweet(self, tweet_content: str, use_ai: bool = True, custom_prompt: str = None) -> Dict[str, Any]:
+    def analyze_tweet(self, tweet_content: str, use_ai: bool = True, custom_prompt: str = None, image_url: str = None) -> Dict[str, Any]:
         """
         Analyze a tweet and return the analysis.
         
@@ -326,6 +398,7 @@ class AnalyzerService:
             tweet_content (str): Tweet content
             use_ai (bool, optional): Whether to use AI analysis. Defaults to True.
             custom_prompt (str, optional): Custom prompt for AI analysis. Defaults to None.
+            image_url (str, optional): URL of an image to include in the analysis (Claude only). Defaults to None.
             
         Returns:
             dict: Analysis results containing the analysis text
@@ -333,9 +406,13 @@ class AnalyzerService:
         # If not using AI, return a simple message
         if not use_ai:
             return {"analysis": "No AI analysis performed"}
+        
+        # Check if we have an image and log it
+        if image_url:
+            log_info(f"Tweet has image for analysis: {image_url}")
             
         # Use AI to analyze the tweet
-        ai_result = self.analyze_with_ai(tweet_content, custom_prompt)
+        ai_result = self.analyze_with_ai(tweet_content, custom_prompt, image_url)
         
         # Log the analysis
         analysis = ai_result.get("analysis", "No analysis provided")
@@ -368,6 +445,6 @@ class AnalyzerService:
 
 # For backward compatibility
 def analyze_tweet(tweet_content):
-    """Analyze a tweet (convenience function for backward compatibility)."""
+    """Analyze a tweet (co  nvenience function for backward compatibility)."""
     analyzer = AnalyzerService()
     return analyzer.analyze_tweet(tweet_content).get("analysis", "No analysis available")

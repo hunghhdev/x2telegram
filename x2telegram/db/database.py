@@ -394,7 +394,7 @@ class Database:
                 cursor.execute('''
                     SELECT id FROM tweets_cache 
                     WHERE follower_id = ?
-                    ORDER BY created_at DESC
+                    ORDER BY id DESC
                     LIMIT ?
                 ''', (follower_id, keep_count))
                 recent_tweet_ids = [row[0] for row in cursor.fetchall()]

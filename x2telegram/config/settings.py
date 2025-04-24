@@ -20,12 +20,12 @@ DATABASE_PATH = os.path.join(DATA_DIR, "tweets.db")
 # API tokens (override these from environment variables)
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "your-token")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "your-chat-id")
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "your-key")
+CLAUDE_API_KEY = os.environ.get("CLAUDE_API_KEY", "your-key")
 
 # Ollama settings
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "deepseek-r1")
-# Set to "ollama" to use locally hosted Ollama models instead of GROQ
+# Set to "ollama" to use locally hosted Ollama models or "claude" for Claude API
 AI_PROVIDER = os.environ.get("AI_PROVIDER", "ollama")
 
 # AI analysis prompts
@@ -38,7 +38,10 @@ DEFAULT_AI_PROMPT = (
 AI_PROMPT = os.environ.get("AI_PROMPT", DEFAULT_AI_PROMPT)
 # Provider-specific prompts (optional - if not set, AI_PROMPT will be used)
 OLLAMA_PROMPT = os.environ.get("OLLAMA_PROMPT", AI_PROMPT)
-GROQ_PROMPT = os.environ.get("GROQ_PROMPT", AI_PROMPT)
+CLAUDE_PROMPT = os.environ.get("CLAUDE_PROMPT", AI_PROMPT)
+
+# Claude model configuration
+CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-3-sonnet-20240229")
 
 # Processing settings
 MAX_TWEETS_PER_USER = int(os.environ.get("MAX_TWEETS_PER_USER", "10"))

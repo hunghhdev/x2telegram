@@ -56,17 +56,23 @@ class TweetProcessor:
                     # Store the tweet first
                     self.db.store_tweet(tweet, follower_id)
                     
-                    # Analyze the tweet content with AI
-                    ai_result = self.analyzer.analyze_with_ai(tweet.tweet_content)
+                    # Check if the tweet has an image (just for logging)
+                    image_url = tweet.tweet_image
+                    if image_url:
+                        log_info(f"Tweet has image: {image_url}")
                     
-                    # Get the analysis text
-                    analysis_text = ai_result.get("analysis", "No analysis provided")
+                    # Analyze the tweet using the analyzer service (using Claude for analysis)
+                    analysis_result = self.analyzer.analyze_tweet(tweet.tweet_content, image_url=image_url)
+                    analysis_text = analysis_result.get("analysis", "No analysis available")
+                    log_info(f"Tweet analyzed: {analysis_text}")
                     
-                    # Update with analysis results
+                    # Store the analysis result in the database
                     self.db.update_analysis_result(tweet.tweet_id, analysis_text)
                     
-                    # Send to Telegram with the analysis included
+                    # Format the message including both tweet content and analysis
                     message = format_tweet_message(username, tweet, analysis_text)
+                    
+                    # Send to Telegram
                     result = self.telegram.send_message(message, parse_mode="HTML")
                     
                     # Mark as sent if successfully delivered to Telegram
@@ -101,7 +107,10 @@ class TweetProcessor:
                 username = next((f.username for f in followers if f.id == follower_id), "unknown")
                 
                 log_info(f"Sending pending tweet to Telegram: {tweet.tweet_url}")
-                message = format_tweet_message(username, tweet, analysis_result)
+                
+                # Format the message without analysis
+                message = format_tweet_message(username, tweet)
+                
                 result = self.telegram.send_message(message, parse_mode="HTML")
                 
                 # Only mark as sent if successfully delivered to Telegram

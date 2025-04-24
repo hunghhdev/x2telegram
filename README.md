@@ -74,7 +74,7 @@ Create a `.env` file based on `.env.example` with the following parameters:
 
 - `TELEGRAM_BOT_TOKEN`: Your Telegram bot token (get it from [@BotFather](https://t.me/BotFather))
 - `TELEGRAM_CHAT_ID`: The ID of the chat where messages will be sent
-- `GROQ_API_KEY`: (Optional) API key for AI-based analysis
+- `ANTHROPIC_API_KEY`: (Optional) API key for AI-based analysis with Claude
 - `MAX_TWEETS_PER_USER`: Maximum number of tweets to process per user
 - `NITTER_MIRRORS`: (Optional) JSON array of custom Nitter instance URLs
 
@@ -86,9 +86,10 @@ The app supports two AI providers for tweet analysis:
    - `OLLAMA_URL`: URL for the Ollama API server (default: http://localhost:11434)
    - `OLLAMA_MODEL`: Model to use with Ollama (default: deepseek-r1)
 
-2. **Groq** (cloud-based):
-   - `GROQ_API_KEY`: Your Groq API key
-   - Set `AI_PROVIDER=groq` to use Groq instead of Ollama
+2. **Claude** (cloud-based):
+   - `ANTHROPIC_API_KEY`: Your Anthropic/Claude API key
+   - `CLAUDE_MODEL`: Claude model to use (default: claude-3-sonnet-20240229)
+   - Set `AI_PROVIDER=claude` to use Claude
 
 ### AI Prompt Customization
 
@@ -96,11 +97,11 @@ You can customize the prompts used for AI analysis:
 
 - `AI_PROMPT`: General prompt for all AI providers
 - `OLLAMA_PROMPT`: Specific prompt for Ollama (overrides AI_PROMPT)
-- `GROQ_PROMPT`: Specific prompt for Groq (overrides AI_PROMPT)
+- `CLAUDE_PROMPT`: Specific prompt for Claude (overrides AI_PROMPT)
 
 Example:
 ```
-AI_PROMPT="Analyze this tweet and determine if it contains news or announcements. Respond with JSON {is_relevant: boolean, reason: string}"
+AI_PROMPT="Analyze this tweet and provide a brief, thoughtful comment about it. Keep your response short and to the point."
 ```
 
 ## Usage
