@@ -53,7 +53,7 @@ x2telegram/
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/x2telegram.git
+   git clone https://github.com/hunghhdev/x2telegram.git
    cd x2telegram
    ```
 
