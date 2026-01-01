@@ -50,7 +50,6 @@ x2telegram/
 │       ├── __init__.py
 │       └── helpers.py        # Helper utilities and logging
 ├── tests/                    # Tests
-│   ├── __init__.py
 │   └── test_db.py            # Database tests
 └── requirements.txt          # Dependencies
 ```
@@ -80,7 +79,7 @@ Create a `.env` file based on `.env.example` with the following parameters:
 
 - `TELEGRAM_BOT_TOKEN`: Your Telegram bot token (get it from [@BotFather](https://t.me/BotFather))
 - `TELEGRAM_CHAT_ID`: The ID of the chat where messages will be sent
-- `ANTHROPIC_API_KEY`: (Optional) API key for AI-based analysis with Claude
+- `AI_API_KEY`: (Optional) API key for AI analysis (auto-detects provider)
 - `MAX_TWEETS_PER_USER`: Maximum number of tweets to process per user
 - `NITTER_MIRRORS`: (Optional) JSON array of custom Nitter instance URLs
 
@@ -242,7 +241,7 @@ crontab -e
 */15 * * * * cd /path/to/x2telegram && python main.py run >> /path/to/x2telegram/logs/cron.log 2>&1
 ```
 
-#### 2. Using Systemd (Linux)
+#### 3. Using Systemd (Linux)
 
 For a more robust solution on Linux systems, use systemd:
 
@@ -324,7 +323,7 @@ python main.py health-check
 
 This checks:
 - Telegram Bot connectivity
-- AI Provider (Ollama or Claude)
+- AI Provider (Ollama, Claude, OpenAI, DeepSeek, Gemini)
 - Nitter mirrors availability
 - Database connection
 
@@ -333,11 +332,8 @@ This checks:
 ### Running Tests
 
 ```bash
-# Run all tests
-python -m unittest discover tests
-
-# Run a specific test
-python -m unittest tests.test_db
+# Run database tests
+python tests/test_db.py
 ```
 
 ### Creating a Virtual Environment
