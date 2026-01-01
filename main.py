@@ -156,69 +156,105 @@ def run_health_check() -> int:
     return 0 if all_ok else 1
 
 
-def run_daemon(interval_minutes: int) -> int:
+def parse_interval(interval_str: str) -> tuple:
+    """Parse interval string to (min_seconds, max_seconds) tuple.
+
+    Formats:
+        "30"     -> (30, 30) fixed 30 seconds
+        "15-45"  -> (15, 45) random between 15-45 seconds
+    """
+    interval_str = interval_str.strip()
+    if '-' in interval_str:
+        parts = interval_str.split('-')
+        if len(parts) == 2:
+            try:
+                min_val = int(parts[0].strip())
+                max_val = int(parts[1].strip())
+                if min_val > max_val:
+                    min_val, max_val = max_val, min_val
+                return (min_val, max_val)
+            except ValueError:
+                pass
+    try:
+        val = int(interval_str)
+        return (val, val)
+    except ValueError:
+        return (60, 60)  # Default 60 seconds
+
+
+def run_daemon(interval: str) -> int:
     """Run the application as a daemon with scheduled processing."""
     import signal
     import time
-    
+    import random
+
     running = True
-    
+    min_interval, max_interval = parse_interval(interval)
+    is_random = min_interval != max_interval
+
     def signal_handler(signum, frame):
         nonlocal running
         print("\n[DAEMON] Received shutdown signal. Finishing current job...")
         running = False
-    
+
     # Register signal handlers for graceful shutdown
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
-    
+
     print(f"\n{'=' * 50}")
     print("x2telegram Daemon Mode")
     print(f"{'=' * 50}")
-    print(f"Interval: {interval_minutes} minutes")
+    if is_random:
+        print(f"Interval: {min_interval}-{max_interval} seconds (random)")
+    else:
+        print(f"Interval: {min_interval} seconds")
     print("Press Ctrl+C to stop")
     print(f"{'=' * 50}\n")
-    
+
     run_count = 0
-    
+
     while running:
         run_count += 1
         start_time = time.time()
-        
+
         print(f"\n[DAEMON] Starting run #{run_count} at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        
+
         try:
             processor = TweetProcessor(DATABASE_PATH)
             success = processor.run()
-            
+
             if success:
                 print(f"[DAEMON] Run #{run_count} completed successfully")
             else:
                 print(f"[DAEMON] Run #{run_count} completed with errors")
-                
+
         except Exception as e:
             print(f"[DAEMON] Error in run #{run_count}: {str(e)}")
-        
+
         elapsed = time.time() - start_time
         print(f"[DAEMON] Run #{run_count} took {elapsed:.1f} seconds")
-        
+
         if not running:
             break
-            
-        # Calculate sleep time
-        sleep_seconds = interval_minutes * 60
+
+        # Calculate sleep time (random if range specified)
+        if is_random:
+            sleep_seconds = random.randint(min_interval, max_interval)
+        else:
+            sleep_seconds = min_interval
+
         next_run = datetime.now().timestamp() + sleep_seconds
         next_run_str = datetime.fromtimestamp(next_run).strftime('%H:%M:%S')
-        
-        print(f"[DAEMON] Next run at {next_run_str} (sleeping {interval_minutes} minutes)")
-        
+
+        print(f"[DAEMON] Next run at {next_run_str} (sleeping {sleep_seconds}s)")
+
         # Sleep in small increments to allow for graceful shutdown
-        sleep_increment = 5  # seconds
+        sleep_increment = 1  # seconds
         slept = 0
         while slept < sleep_seconds and running:
             time.sleep(min(sleep_increment, sleep_seconds - slept))
             slept += sleep_increment
-    
+
     print(f"\n[DAEMON] Shutdown complete. Total runs: {run_count}")
     return 0
 
@@ -260,8 +296,8 @@ def main() -> int:
     
     # Command: daemon
     daemon_parser = subparsers.add_parser('daemon', help='Run as daemon with scheduled processing')
-    daemon_parser.add_argument('--interval', type=int, default=15, 
-                               help='Interval between runs in minutes (default: 15)')
+    daemon_parser.add_argument('--interval', type=str, default='60',
+                               help='Interval in seconds. Use "30" for fixed or "15-45" for random range (default: 60)')
     
     # Parse the arguments
     args = parser.parse_args()

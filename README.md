@@ -31,9 +31,11 @@ x2telegram/
 ├── main.py                   # Command-line interface
 ├── x2telegram/               # Main package
 │   ├── __init__.py           # Package initialization
+│   ├── py.typed              # PEP 561 type hints marker
 │   ├── config/               # Configuration settings
 │   │   ├── __init__.py
-│   │   └── settings.py       # Configuration constants and environment vars
+│   │   ├── constants.py      # Centralized constants (timeouts, retries, etc.)
+│   │   └── settings.py       # Configuration and environment vars
 │   ├── core/                 # Core functionality
 │   │   ├── __init__.py
 │   │   ├── models.py         # Data models (Tweet, Follower)
@@ -43,14 +45,18 @@ x2telegram/
 │   │   └── database.py       # Database connection and operations
 │   ├── services/             # External services integration
 │   │   ├── __init__.py
-│   │   ├── analyzer.py       # Tweet relevance analysis
-│   │   ├── rss.py            # RSS feed fetching from Nitter
+│   │   ├── analyzer.py       # Tweet relevance analysis (multi-provider)
+│   │   ├── rss.py            # HTML scraping from Nitter mirrors
 │   │   └── telegram.py       # Telegram messaging
 │   └── utils/                # Utility functions
 │       ├── __init__.py
 │       └── helpers.py        # Helper utilities and logging
-├── tests/                    # Tests
-│   └── test_db.py            # Database tests
+├── tests/                    # Test suite (pytest)
+│   ├── conftest.py           # Shared fixtures
+│   ├── test_analyzer.py      # AI analyzer tests
+│   ├── test_database.py      # Database tests
+│   ├── test_rss.py           # RSS/scraping tests
+│   └── test_telegram.py      # Telegram service tests
 └── requirements.txt          # Dependencies
 ```
 
@@ -205,7 +211,10 @@ python main.py maintenance
 python main.py health-check
 
 # Run as daemon (background service)
-python main.py daemon --interval 15
+python main.py daemon --interval 60
+
+# Run daemon with random interval (15-45 seconds)
+python main.py daemon --interval 15-45
 ```
 
 ### Deployment Options
@@ -217,17 +226,25 @@ You can deploy x2telegram in several ways depending on your needs:
 The simplest way to run x2telegram continuously:
 
 ```bash
-# Run with default 15-minute interval
+# Run with default 60 seconds interval
 python main.py daemon
 
-# Run with custom interval (5 minutes)
-python main.py daemon --interval 5
+# Run with fixed interval (30 seconds)
+python main.py daemon --interval 30
+
+# Run with random interval (15-45 seconds)
+# Each cycle will use a random value within this range
+python main.py daemon --interval 15-45
+
+# Run with longer interval (5 minutes = 300 seconds)
+python main.py daemon --interval 300
 ```
 
 Features:
-- Graceful shutdown with Ctrl+C or SIGTERM
-- Automatic scheduling without cron
-- Detailed logging for each run
+- **Flexible interval**: Fixed or random range in seconds
+- **Graceful shutdown**: Ctrl+C or SIGTERM
+- **Automatic scheduling**: No cron needed
+- **Detailed logging**: Each run is logged with timing
 
 #### 2. Using Cron
 
@@ -305,7 +322,10 @@ After=network.target
 Type=simple
 User=youruser
 WorkingDirectory=/path/to/x2telegram
-ExecStart=/path/to/x2telegram/venv/bin/python main.py daemon --interval 15
+# Fixed 60 seconds interval
+ExecStart=/path/to/x2telegram/venv/bin/python main.py daemon --interval 60
+# Or random 30-90 seconds interval
+# ExecStart=/path/to/x2telegram/venv/bin/python main.py daemon --interval 30-90
 Restart=always
 RestartSec=10
 
@@ -331,9 +351,23 @@ This checks:
 
 ### Running Tests
 
+The project uses pytest for testing with 64+ test cases covering all core services:
+
 ```bash
-# Run database tests
-python tests/test_db.py
+# Activate virtual environment
+source venv/bin/activate
+
+# Run all tests
+pytest tests/ -v
+
+# Run with coverage report
+pytest tests/ --cov=x2telegram --cov-report=html
+
+# Run specific test file
+pytest tests/test_database.py -v
+
+# Run specific test class
+pytest tests/test_analyzer.py::TestAnalyzeWithClaude -v
 ```
 
 ### Creating a Virtual Environment
