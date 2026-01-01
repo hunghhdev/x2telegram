@@ -47,6 +47,17 @@ CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-3-sonnet-20240229")
 # Processing settings
 MAX_TWEETS_PER_USER = int(os.environ.get("MAX_TWEETS_PER_USER", "10"))
 
+# Tweet filtering settings
+# FILTER_KEYWORDS: Only forward tweets containing these keywords (comma-separated, case-insensitive)
+# If empty, all tweets are forwarded
+FILTER_KEYWORDS_INCLUDE = [k.strip().lower() for k in os.environ.get("FILTER_KEYWORDS_INCLUDE", "").split(",") if k.strip()]
+# FILTER_KEYWORDS_EXCLUDE: Skip tweets containing these keywords (comma-separated, case-insensitive)
+FILTER_KEYWORDS_EXCLUDE = [k.strip().lower() for k in os.environ.get("FILTER_KEYWORDS_EXCLUDE", "").split(",") if k.strip()]
+# FILTER_REGEX_INCLUDE: Only forward tweets matching these regex patterns (comma-separated)
+FILTER_REGEX_INCLUDE = [p.strip() for p in os.environ.get("FILTER_REGEX_INCLUDE", "").split(",") if p.strip()]
+# FILTER_REGEX_EXCLUDE: Skip tweets matching these regex patterns (comma-separated)
+FILTER_REGEX_EXCLUDE = [p.strip() for p in os.environ.get("FILTER_REGEX_EXCLUDE", "").split(",") if p.strip()]
+
 # Default Nitter mirrors - preferably override these from environment
 NITTER_MIRRORS = [
     "https://nitter.net"

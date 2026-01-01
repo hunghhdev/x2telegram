@@ -128,6 +128,77 @@ def run_health_check():
     
     return 0 if all_ok else 1
 
+
+def run_daemon(interval_minutes):
+    """Run the application as a daemon with scheduled processing.
+    
+    Args:
+        interval_minutes: Interval between processing runs in minutes
+    """
+    import signal
+    import time
+    
+    running = True
+    
+    def signal_handler(signum, frame):
+        nonlocal running
+        print("\n[DAEMON] Received shutdown signal. Finishing current job...")
+        running = False
+    
+    # Register signal handlers for graceful shutdown
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
+    print(f"\n{'=' * 50}")
+    print("x2telegram Daemon Mode")
+    print(f"{'=' * 50}")
+    print(f"Interval: {interval_minutes} minutes")
+    print("Press Ctrl+C to stop")
+    print(f"{'=' * 50}\n")
+    
+    run_count = 0
+    
+    while running:
+        run_count += 1
+        start_time = time.time()
+        
+        print(f"\n[DAEMON] Starting run #{run_count} at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        
+        try:
+            processor = TweetProcessor(DATABASE_PATH)
+            success = processor.run()
+            
+            if success:
+                print(f"[DAEMON] Run #{run_count} completed successfully")
+            else:
+                print(f"[DAEMON] Run #{run_count} completed with errors")
+                
+        except Exception as e:
+            print(f"[DAEMON] Error in run #{run_count}: {str(e)}")
+        
+        elapsed = time.time() - start_time
+        print(f"[DAEMON] Run #{run_count} took {elapsed:.1f} seconds")
+        
+        if not running:
+            break
+            
+        # Calculate sleep time
+        sleep_seconds = interval_minutes * 60
+        next_run = datetime.now().timestamp() + sleep_seconds
+        next_run_str = datetime.fromtimestamp(next_run).strftime('%H:%M:%S')
+        
+        print(f"[DAEMON] Next run at {next_run_str} (sleeping {interval_minutes} minutes)")
+        
+        # Sleep in small increments to allow for graceful shutdown
+        sleep_increment = 5  # seconds
+        slept = 0
+        while slept < sleep_seconds and running:
+            time.sleep(min(sleep_increment, sleep_seconds - slept))
+            slept += sleep_increment
+    
+    print(f"\n[DAEMON] Shutdown complete. Total runs: {run_count}")
+    return 0
+
 def main():
     """Main entry point for the application."""
     parser = argparse.ArgumentParser(description='Twitter/X to Telegram forwarding service')
@@ -163,6 +234,11 @@ def main():
     
     # Command: health-check
     health_parser = subparsers.add_parser('health-check', help='Check connectivity to external services')
+    
+    # Command: daemon
+    daemon_parser = subparsers.add_parser('daemon', help='Run as daemon with scheduled processing')
+    daemon_parser.add_argument('--interval', type=int, default=15, 
+                               help='Interval between runs in minutes (default: 15)')
     
     # Parse the arguments
     args = parser.parse_args()
@@ -247,6 +323,9 @@ def main():
             
         elif args.command == 'health-check':
             return run_health_check()
+            
+        elif args.command == 'daemon':
+            return run_daemon(args.interval)
             
     except Exception as e:
         log_error(f"Error: {str(e)}")

@@ -10,12 +10,19 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 
-from ..config import MAX_TWEETS_PER_USER
+from ..config import (
+    MAX_TWEETS_PER_USER,
+    FILTER_KEYWORDS_INCLUDE, FILTER_KEYWORDS_EXCLUDE,
+    FILTER_REGEX_INCLUDE, FILTER_REGEX_EXCLUDE
+)
 # Import services
 from ..services.rss import RSSService
 from ..services.analyzer import AnalyzerService
 from ..services.telegram import TelegramService
-from ..utils import log_info, log_error, log_debug, format_tweet_message, safe_sleep
+from ..utils import (
+    log_info, log_error, log_debug, format_tweet_message, safe_sleep,
+    filter_tweet_content, compute_content_hash
+)
 
 # Database will be imported inside methods to avoid circular imports
 
@@ -66,8 +73,27 @@ class TweetProcessor:
                 if not self.db.tweet_exists(tweet.tweet_id):
                     log_info(f"New tweet found: {tweet.tweet_url}")
                     
-                    # Store the tweet first
-                    self.db.store_tweet(tweet, follower_id)
+                    # Check for duplicate content using hash
+                    content_hash = compute_content_hash(tweet.tweet_content)
+                    if self.db.content_hash_exists(content_hash):
+                        log_info(f"Skipping duplicate content (hash: {content_hash[:8]}...)")
+                        continue
+                    
+                    # Apply keyword/regex filters
+                    if not filter_tweet_content(
+                        tweet.tweet_content,
+                        include_keywords=FILTER_KEYWORDS_INCLUDE or None,
+                        exclude_keywords=FILTER_KEYWORDS_EXCLUDE or None,
+                        include_regex=FILTER_REGEX_INCLUDE or None,
+                        exclude_regex=FILTER_REGEX_EXCLUDE or None
+                    ):
+                        log_info(f"Tweet filtered out by keyword/regex rules")
+                        # Still store the tweet to avoid reprocessing, but mark as filtered
+                        self.db.store_tweet(tweet, follower_id, content_hash=content_hash, filtered=True)
+                        continue
+                    
+                    # Store the tweet
+                    self.db.store_tweet(tweet, follower_id, content_hash=content_hash)
                     
                     # Check if the tweet has an image (just for logging)
                     image_url = tweet.tweet_image
@@ -182,7 +208,25 @@ class TweetProcessor:
                     if not thread_db.tweet_exists(tweet.tweet_id):
                         log_info(f"[Thread] New tweet found: {tweet.tweet_url}")
                         
-                        thread_db.store_tweet(tweet, follower_id)
+                        # Check for duplicate content using hash
+                        content_hash = compute_content_hash(tweet.tweet_content)
+                        if thread_db.content_hash_exists(content_hash):
+                            log_info(f"[Thread] Skipping duplicate content (hash: {content_hash[:8]}...)")
+                            continue
+                        
+                        # Apply keyword/regex filters
+                        if not filter_tweet_content(
+                            tweet.tweet_content,
+                            include_keywords=FILTER_KEYWORDS_INCLUDE or None,
+                            exclude_keywords=FILTER_KEYWORDS_EXCLUDE or None,
+                            include_regex=FILTER_REGEX_INCLUDE or None,
+                            exclude_regex=FILTER_REGEX_EXCLUDE or None
+                        ):
+                            log_info(f"[Thread] Tweet filtered out by keyword/regex rules")
+                            thread_db.store_tweet(tweet, follower_id, content_hash=content_hash, filtered=True)
+                            continue
+                        
+                        thread_db.store_tweet(tweet, follower_id, content_hash=content_hash)
                         
                         image_url = tweet.tweet_image
                         if image_url:

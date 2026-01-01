@@ -80,6 +80,8 @@ class Database:
                     tweet_url TEXT,
                     tweet_content TEXT,
                     tweet_image BLOB,
+                    content_hash TEXT,
+                    is_filtered BOOLEAN DEFAULT 0,
                     created_at DATETIME,
                     inserted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     is_analyzed BOOLEAN DEFAULT 0,
@@ -89,6 +91,17 @@ class Database:
                     FOREIGN KEY(follower_id) REFERENCES followers(id)
                 );
             ''')
+            
+            # Add content_hash column if it doesn't exist (for migration)
+            try:
+                cursor.execute('ALTER TABLE tweets_cache ADD COLUMN content_hash TEXT')
+            except:
+                pass  # Column already exists
+            
+            try:
+                cursor.execute('ALTER TABLE tweets_cache ADD COLUMN is_filtered BOOLEAN DEFAULT 0')
+            except:
+                pass  # Column already exists
             
             # Create indexes for performance optimization
             cursor.execute('''
@@ -102,6 +115,9 @@ class Database:
             ''')
             cursor.execute('''
                 CREATE INDEX IF NOT EXISTS idx_is_sent ON tweets_cache(is_sent_to_telegram);
+            ''')
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_content_hash ON tweets_cache(content_hash);
             ''')
             
             self.conn.commit()
@@ -197,8 +213,15 @@ class Database:
     
     # Tweet Management Methods
     
-    def store_tweet(self, tweet, follower_id):
-        """Store a tweet in the database and clean up old tweets."""
+    def store_tweet(self, tweet, follower_id, content_hash=None, filtered=False):
+        """Store a tweet in the database and clean up old tweets.
+        
+        Args:
+            tweet: Tweet object to store
+            follower_id: ID of the follower
+            content_hash: Optional hash of tweet content for duplicate detection
+            filtered: Whether the tweet was filtered out by keyword/regex rules
+        """
         if not self.conn:
             self.connect()
         
@@ -207,19 +230,21 @@ class Database:
             cursor.execute('''
                 INSERT INTO tweets_cache (
                     follower_id, tweet_id, tweet_url, 
-                    tweet_content, tweet_image, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?)
+                    tweet_content, tweet_image, content_hash, is_filtered, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 follower_id, 
                 tweet.tweet_id, 
                 tweet.tweet_url, 
                 tweet.tweet_content, 
-                tweet.tweet_image, 
+                tweet.tweet_image,
+                content_hash,
+                1 if filtered else 0,
                 tweet.created_at
             ))
             self.conn.commit()
             tweet_id = cursor.lastrowid
-            log_debug(f"Stored tweet: {tweet.tweet_id}")
+            log_debug(f"Stored tweet: {tweet.tweet_id}" + (" (filtered)" if filtered else ""))
             
             # Clean up old tweets to keep only the most recent ones
             self.cleanup_old_tweets(follower_id)
@@ -231,6 +256,29 @@ class Database:
         except Error as e:
             log_error(f"Error storing tweet: {e}")
             return None
+    
+    def content_hash_exists(self, content_hash):
+        """Check if a content hash already exists in the database (duplicate detection).
+        
+        Args:
+            content_hash: MD5 hash of normalized tweet content
+            
+        Returns:
+            bool: True if hash exists, False otherwise
+        """
+        if not self.conn:
+            self.connect()
+        
+        if not content_hash:
+            return False
+        
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT 1 FROM tweets_cache WHERE content_hash = ?", (content_hash,))
+            return cursor.fetchone() is not None
+        except Error as e:
+            log_error(f"Error checking content hash: {e}")
+            return False
     
     def tweet_exists(self, tweet_id):
         """Check if a tweet already exists in the database."""

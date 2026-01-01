@@ -1,12 +1,19 @@
 """
 Telegram service for sending messages to Telegram chats.
 """
+import os
 import requests
+import threading
 import time
+from collections import deque
 from typing import Dict, Any, Optional
 
 from ..config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 from ..utils import log_info, log_error, log_debug
+
+# Rate limit: Telegram allows ~30 messages per second to different chats
+# For same chat, limit is ~1 message per second
+DEFAULT_RATE_LIMIT = float(os.environ.get('TELEGRAM_RATE_LIMIT', '1.0'))  # seconds between messages
 
 class TelegramService:
     """Service for sending messages to Telegram."""
@@ -27,6 +34,22 @@ class TelegramService:
         
         # Connection pooling with requests.Session for better performance
         self.session = requests.Session()
+        
+        # Rate limiting
+        self.rate_limit = DEFAULT_RATE_LIMIT
+        self._last_send_time = 0
+        self._rate_lock = threading.Lock()
+    
+    def _wait_for_rate_limit(self):
+        """Wait if necessary to respect rate limits."""
+        with self._rate_lock:
+            now = time.time()
+            elapsed = now - self._last_send_time
+            if elapsed < self.rate_limit:
+                wait_time = self.rate_limit - elapsed
+                log_debug(f"Rate limiting: waiting {wait_time:.2f}s before sending")
+                time.sleep(wait_time)
+            self._last_send_time = time.time()
         
     def send_message(self, text: str, chat_id=None, parse_mode="HTML", 
                      disable_web_page_preview=False) -> Dict[str, Any]:
@@ -54,6 +77,9 @@ class TelegramService:
             "parse_mode": parse_mode,
             "disable_web_page_preview": disable_web_page_preview
         }
+        
+        # Apply rate limiting before sending
+        self._wait_for_rate_limit()
         
         # Try to send message with retries
         for attempt in range(self.retry_count):
@@ -98,6 +124,9 @@ class TelegramService:
             "caption": caption,
             "parse_mode": "HTML"
         }
+        
+        # Apply rate limiting before sending
+        self._wait_for_rate_limit()
         
         try:
             log_info(f"Sending photo to Telegram chat {chat_id}")

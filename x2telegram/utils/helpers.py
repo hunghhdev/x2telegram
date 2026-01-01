@@ -203,3 +203,90 @@ def generate_timestamp() -> str:
         str: Current timestamp in ISO format
     """
     return datetime.now().isoformat()
+
+
+def filter_tweet_content(content: str, 
+                         include_keywords: List[str] = None,
+                         exclude_keywords: List[str] = None,
+                         include_regex: List[str] = None,
+                         exclude_regex: List[str] = None) -> bool:
+    """
+    Check if a tweet should be forwarded based on filter rules.
+    
+    Args:
+        content: Tweet content to check
+        include_keywords: Only forward if content contains any of these (case-insensitive)
+        exclude_keywords: Skip if content contains any of these (case-insensitive)
+        include_regex: Only forward if content matches any of these patterns
+        exclude_regex: Skip if content matches any of these patterns
+        
+    Returns:
+        bool: True if tweet should be forwarded, False if it should be skipped
+    """
+    import re
+    
+    content_lower = content.lower()
+    
+    # Check exclude keywords first (highest priority)
+    if exclude_keywords:
+        for keyword in exclude_keywords:
+            if keyword in content_lower:
+                log_debug(f"Tweet excluded by keyword: '{keyword}'")
+                return False
+    
+    # Check exclude regex
+    if exclude_regex:
+        for pattern in exclude_regex:
+            try:
+                if re.search(pattern, content, re.IGNORECASE):
+                    log_debug(f"Tweet excluded by regex: '{pattern}'")
+                    return False
+            except re.error:
+                log_error(f"Invalid exclude regex pattern: '{pattern}'")
+    
+    # If no include filters, accept all (that weren't excluded)
+    has_include_filters = bool(include_keywords or include_regex)
+    if not has_include_filters:
+        return True
+    
+    # Check include keywords
+    if include_keywords:
+        for keyword in include_keywords:
+            if keyword in content_lower:
+                log_debug(f"Tweet included by keyword: '{keyword}'")
+                return True
+    
+    # Check include regex
+    if include_regex:
+        for pattern in include_regex:
+            try:
+                if re.search(pattern, content, re.IGNORECASE):
+                    log_debug(f"Tweet included by regex: '{pattern}'")
+                    return True
+            except re.error:
+                log_error(f"Invalid include regex pattern: '{pattern}'")
+    
+    # Has include filters but none matched
+    log_debug("Tweet skipped: no include filters matched")
+    return False
+
+
+def compute_content_hash(content: str) -> str:
+    """
+    Compute a hash of tweet content for duplicate detection.
+    
+    Args:
+        content: Tweet content to hash
+        
+    Returns:
+        str: MD5 hash of normalized content
+    """
+    import hashlib
+    
+    # Normalize: lowercase, remove extra whitespace, remove URLs
+    import re
+    normalized = content.lower()
+    normalized = re.sub(r'https?://\S+', '', normalized)  # Remove URLs
+    normalized = re.sub(r'\s+', ' ', normalized).strip()  # Normalize whitespace
+    
+    return hashlib.md5(normalized.encode('utf-8')).hexdigest()
