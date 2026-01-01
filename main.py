@@ -14,7 +14,8 @@ from x2telegram.db import Database
 from x2telegram.utils import log_info, log_error
 from x2telegram.config import DATABASE_PATH, OLLAMA_URL, OLLAMA_MODEL, AI_PROVIDER, NITTER_MIRRORS
 
-def setup_logging():
+
+def setup_logging() -> None:
     """Configure logging for the application."""
     logging.basicConfig(
         level=logging.INFO,
@@ -23,7 +24,7 @@ def setup_logging():
     )
 
 
-def run_health_check():
+def run_health_check() -> int:
     """Check connectivity to all external services."""
     import requests
     
@@ -155,12 +156,8 @@ def run_health_check():
     return 0 if all_ok else 1
 
 
-def run_daemon(interval_minutes):
-    """Run the application as a daemon with scheduled processing.
-    
-    Args:
-        interval_minutes: Interval between processing runs in minutes
-    """
+def run_daemon(interval_minutes: int) -> int:
+    """Run the application as a daemon with scheduled processing."""
     import signal
     import time
     
@@ -225,7 +222,7 @@ def run_daemon(interval_minutes):
     print(f"\n[DAEMON] Shutdown complete. Total runs: {run_count}")
     return 0
 
-def main():
+def main() -> int:
     """Main entry point for the application."""
     parser = argparse.ArgumentParser(description='Twitter/X to Telegram forwarding service')
     

@@ -9,11 +9,15 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
+from typing import Optional, List, Dict, Tuple
+
+from .models import Follower, Tweet
 
 from ..config import (
     MAX_TWEETS_PER_USER,
     FILTER_KEYWORDS_INCLUDE, FILTER_KEYWORDS_EXCLUDE,
-    FILTER_REGEX_INCLUDE, FILTER_REGEX_EXCLUDE
+    FILTER_REGEX_INCLUDE, FILTER_REGEX_EXCLUDE,
+    DEFAULT_MAX_WORKERS, DEFAULT_PENDING_LIMIT, SEQUENTIAL_PROCESSING_DELAY,
 )
 # Import services
 from ..services.rss import RSSService
@@ -26,20 +30,15 @@ from ..utils import (
 
 # Database will be imported inside methods to avoid circular imports
 
-# Default number of concurrent workers for processing followers
-DEFAULT_MAX_WORKERS = int(os.environ.get('MAX_WORKERS', '3'))
+# Allow environment override for max workers
+_MAX_WORKERS = int(os.environ.get('MAX_WORKERS', str(DEFAULT_MAX_WORKERS)))
 
 
 class TweetProcessor:
     """Main processor for handling tweet fetching, analysis, and forwarding."""
-    
-    def __init__(self, db_path=None, max_workers=None):
-        """Initialize the tweet processor with database and service instances.
-        
-        Args:
-            db_path: Path to the SQLite database file
-            max_workers: Maximum number of concurrent workers for processing followers
-        """
+
+    def __init__(self, db_path: Optional[str] = None, max_workers: Optional[int] = None) -> None:
+        """Initialize the tweet processor with database and service instances."""
         # Import Database here to avoid circular imports
         from ..db import Database
         self.db_path = db_path
@@ -47,15 +46,10 @@ class TweetProcessor:
         self.rss_service = RSSService()
         self.analyzer = AnalyzerService()
         self.telegram = TelegramService()
-        self.max_workers = max_workers or DEFAULT_MAX_WORKERS
+        self.max_workers = max_workers or _MAX_WORKERS
     
-    def process_follower_tweets(self, follower):
-        """
-        Process tweets for a specific follower.
-        
-        Args:
-            follower: A Follower object with id, username, and enabled properties
-        """
+    def process_follower_tweets(self, follower: Follower) -> None:
+        """Process tweets for a specific follower."""
         follower_id = follower.id
         username = follower.username
         log_info(f"Processing tweets for @{username}...")
@@ -124,13 +118,8 @@ class TweetProcessor:
         except Exception as e:
             log_error(f"Error processing tweets for @{username}: {str(e)}")
     
-    def process_pending_tweets(self, limit=10):
-        """
-        Process tweets that have been analyzed but not sent yet.
-        
-        Args:
-            limit (int): Maximum number of pending tweets to process
-        """
+    def process_pending_tweets(self, limit: int = DEFAULT_PENDING_LIMIT) -> None:
+        """Process tweets that have been analyzed but not sent yet."""
         try:
             log_info("Checking for pending tweets to send...")
             unsent_tweets = self.db.get_unsent_analyzed_tweets(limit)
@@ -165,17 +154,12 @@ class TweetProcessor:
         except Exception as e:
             log_error(f"Error processing pending tweets: {str(e)}")
     
-    def _process_followers_concurrent(self, followers):
-        """
-        Process multiple followers concurrently using ThreadPoolExecutor.
-        
-        Args:
-            followers: List of Follower objects to process
-        """
+    def _process_followers_concurrent(self, followers: List[Follower]) -> None:
+        """Process multiple followers concurrently using ThreadPoolExecutor."""
         log_info(f"Processing {len(followers)} followers concurrently with {self.max_workers} workers")
         
         # Create a thread-safe wrapper that creates its own database connection
-        def process_follower_thread_safe(follower):
+        def process_follower_thread_safe(follower: Follower) -> Tuple[str, bool]:
             """Process a single follower with its own database connection."""
             from ..db import Database
             
@@ -276,7 +260,7 @@ class TweetProcessor:
         successful = sum(1 for v in results.values() if v)
         log_info(f"Concurrent processing complete: {successful}/{len(followers)} followers processed successfully")
     
-    def run(self):
+    def run(self) -> bool:
         """Run the main processing job."""
         log_info(f"Starting tweet processing job at {datetime.now().isoformat()}")
         
@@ -300,7 +284,7 @@ class TweetProcessor:
                 # Sequential processing for single follower or when concurrency is disabled
                 for follower in followers:
                     self.process_follower_tweets(follower)
-                    safe_sleep(1)
+                    safe_sleep(SEQUENTIAL_PROCESSING_DELAY)
             
             # Process any pending tweets that need to be sent
             self.process_pending_tweets()

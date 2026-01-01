@@ -2,8 +2,9 @@
 Database module for the x2telegram application.
 """
 import sqlite3
-from sqlite3 import Error
+from sqlite3 import Error, Connection
 from datetime import datetime
+from typing import Optional, List, Tuple
 import os
 
 from ..config import DATABASE_PATH
@@ -12,13 +13,13 @@ from ..utils import log_info, log_error, log_debug
 
 class Database:
     """Database manager for the x2telegram application."""
-    
-    def __init__(self, db_path=DATABASE_PATH):
+
+    def __init__(self, db_path: str = DATABASE_PATH) -> None:
         """Initialize database connection."""
         self.db_path = db_path
-        self.conn = None
-    
-    def connect(self):
+        self.conn: Optional[Connection] = None
+
+    def connect(self) -> Optional[Connection]:
         """Create a database connection to the SQLite database."""
         try:
             # For in-memory database, no need to create directories
@@ -39,22 +40,22 @@ class Database:
             log_error(f"Error connecting to database: {e}")
             return None
     
-    def close(self):
+    def close(self) -> None:
         """Close the database connection."""
         if self.conn:
             self.conn.close()
             log_debug("Database connection closed")
-    
-    def __enter__(self):
+
+    def __enter__(self) -> "Database":
         """Context manager entry."""
         self.connect()
         return self
-    
-    def __exit__(self, exc_type, exc_val, exc_tb):
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """Context manager exit."""
         self.close()
 
-    def create_tables(self):
+    def create_tables(self) -> bool:
         """Create necessary tables if they don't exist."""
         if not self.conn:
             self.connect()
@@ -128,8 +129,8 @@ class Database:
             return False
     
     # Follower Management Methods
-    
-    def add_follower(self, username):
+
+    def add_follower(self, username: str) -> Optional[Follower]:
         """Add a new follower to follow their tweets."""
         if not self.conn:
             self.connect()
@@ -150,7 +151,7 @@ class Database:
             log_error(f"Error adding follower: {e}")
             return None
     
-    def remove_follower(self, username):
+    def remove_follower(self, username: str) -> bool:
         """Remove a follower."""
         if not self.conn:
             self.connect()
@@ -169,7 +170,7 @@ class Database:
             log_error(f"Error removing follower: {e}")
             return False
     
-    def enable_follower(self, username, enabled=True):
+    def enable_follower(self, username: str, enabled: bool = True) -> bool:
         """Enable or disable a follower."""
         if not self.conn:
             self.connect()
@@ -190,7 +191,7 @@ class Database:
             log_error(f"Error updating follower status: {e}")
             return False
     
-    def get_all_followers(self, enabled_only=True):
+    def get_all_followers(self, enabled_only: bool = True) -> List[Follower]:
         """Get all followers, optionally filtered by enabled status."""
         if not self.conn:
             self.connect()
@@ -212,16 +213,9 @@ class Database:
             return []
     
     # Tweet Management Methods
-    
-    def store_tweet(self, tweet, follower_id, content_hash=None, filtered=False):
-        """Store a tweet in the database and clean up old tweets.
-        
-        Args:
-            tweet: Tweet object to store
-            follower_id: ID of the follower
-            content_hash: Optional hash of tweet content for duplicate detection
-            filtered: Whether the tweet was filtered out by keyword/regex rules
-        """
+
+    def store_tweet(self, tweet: Tweet, follower_id: int, content_hash: Optional[str] = None, filtered: bool = False) -> Optional[int]:
+        """Store a tweet in the database and clean up old tweets."""
         if not self.conn:
             self.connect()
         
@@ -257,15 +251,8 @@ class Database:
             log_error(f"Error storing tweet: {e}")
             return None
     
-    def content_hash_exists(self, content_hash):
-        """Check if a content hash already exists in the database (duplicate detection).
-        
-        Args:
-            content_hash: MD5 hash of normalized tweet content
-            
-        Returns:
-            bool: True if hash exists, False otherwise
-        """
+    def content_hash_exists(self, content_hash: Optional[str]) -> bool:
+        """Check if a content hash already exists in the database."""
         if not self.conn:
             self.connect()
         
@@ -280,7 +267,7 @@ class Database:
             log_error(f"Error checking content hash: {e}")
             return False
     
-    def tweet_exists(self, tweet_id):
+    def tweet_exists(self, tweet_id: str) -> bool:
         """Check if a tweet already exists in the database."""
         if not self.conn:
             self.connect()
@@ -293,7 +280,7 @@ class Database:
             log_error(f"Error checking tweet existence: {e}")
             return False
     
-    def update_analysis_result(self, tweet_id, analysis_result):
+    def update_analysis_result(self, tweet_id: str, analysis_result: str) -> bool:
         """Update the analysis result for a tweet."""
         if not self.conn:
             self.connect()
@@ -316,7 +303,7 @@ class Database:
             log_error(f"Error updating analysis: {e}")
             return False
     
-    def mark_as_sent(self, tweet_id):
+    def mark_as_sent(self, tweet_id: str) -> bool:
         """Mark a tweet as sent to Telegram."""
         if not self.conn:
             self.connect()
@@ -339,7 +326,7 @@ class Database:
             log_error(f"Error marking tweet as sent: {e}")
             return False
     
-    def get_unsent_analyzed_tweets(self, limit=10):
+    def get_unsent_analyzed_tweets(self, limit: int = 10) -> List[Tuple[Tweet, int, str]]:
         """Get tweets that have been analyzed but not sent to Telegram."""
         if not self.conn:
             self.connect()
@@ -372,7 +359,7 @@ class Database:
             log_error(f"Error getting unsent tweets: {e}")
             return []
     
-    def get_unanalyzed_tweets(self, limit=50):
+    def get_unanalyzed_tweets(self, limit: int = 50) -> List[Tuple[Tweet, int]]:
         """Get tweets that have not been analyzed yet."""
         if not self.conn:
             self.connect()
@@ -405,12 +392,9 @@ class Database:
             return []
     
     # Maintenance Methods
-    
-    def cleanup_old_tweets(self, follower_id, keep_count=10):
-        """
-        Remove old tweets for a follower, keeping only the 'keep_count' most recent ones 
-        and any tweets that have been sent to Telegram regardless of age.
-        """
+
+    def cleanup_old_tweets(self, follower_id: int, keep_count: int = 10) -> int:
+        """Remove old tweets for a follower, keeping only the most recent ones."""
         if not self.conn:
             self.connect()
         
@@ -469,7 +453,7 @@ class Database:
             log_error(f"Error cleaning up old tweets: {e}")
             return 0
     
-    def run_maintenance(self):
+    def run_maintenance(self) -> int:
         """Run maintenance tasks like cleaning up old tweets for all followers."""
         if not self.conn:
             self.connect()
@@ -491,7 +475,7 @@ class Database:
             log_error(f"Error during maintenance: {e}")
             return 0
 
-def init_database(db_path=DATABASE_PATH):
+def init_database(db_path: str = DATABASE_PATH) -> Optional[Database]:
     """Initialize the database with tables and indexes."""
     db = Database(db_path)
     if db.connect():

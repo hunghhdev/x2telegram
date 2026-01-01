@@ -21,14 +21,20 @@ from ..config import (
     # DeepSeek
     DEEPSEEK_API_KEY, DEEPSEEK_MODEL, DEEPSEEK_BASE_URL, DEEPSEEK_PROMPT,
     # Gemini
-    GEMINI_API_KEY, GEMINI_MODEL, GEMINI_PROMPT
+    GEMINI_API_KEY, GEMINI_MODEL, GEMINI_PROMPT,
+    # Constants
+    OLLAMA_TIMEOUT, CLAUDE_TIMEOUT, OPENAI_TIMEOUT, GEMINI_TIMEOUT,
+    IMAGE_DOWNLOAD_TIMEOUT, DEFAULT_MAX_RETRIES, DEFAULT_RETRY_DELAY,
+    DEFAULT_BACKOFF_FACTOR, RETRY_JITTER_MIN, RETRY_JITTER_MAX,
+    AI_MAX_TOKENS, AI_TEMPERATURE, AI_CONFIDENCE_THRESHOLD,
+    CLAUDE_API_VERSION, CLAUDE_API_ENDPOINT, GEMINI_API_BASE,
 )
 from ..utils import log_info, log_error, log_debug
 
 class AnalyzerService:
     """Service for analyzing tweets to determine relevance."""
     
-    def __init__(self, api_key=None, threshold=0.7, provider=None, ollama_url=None, ollama_model=None):
+    def __init__(self, api_key=None, threshold=AI_CONFIDENCE_THRESHOLD, provider=None, ollama_url=None, ollama_model=None):
         """
         Initialize the analyzer service.
         
@@ -55,7 +61,7 @@ class AnalyzerService:
         # Connection pooling with requests.Session for better performance
         self.session = requests.Session()
     
-    def analyze_with_ollama(self, text: str, prompt: str = None, max_retries=3, retry_delay=2, timeout=30) -> Dict[str, Any]:
+    def analyze_with_ollama(self, text: str, prompt: str = None, max_retries=DEFAULT_MAX_RETRIES, retry_delay=DEFAULT_RETRY_DELAY, timeout=OLLAMA_TIMEOUT) -> Dict[str, Any]:
         """
         Analyze text using Ollama with retry mechanism.
         
@@ -127,11 +133,11 @@ class AnalyzerService:
                     retry_count += 1
                     if retry_count <= max_retries:
                         # Adding jitter to prevent thundering herd
-                        actual_delay = retry_delay * (0.9 + 0.2 * random.random())
+                        actual_delay = retry_delay * (RETRY_JITTER_MIN + RETRY_JITTER_MAX * random.random())
                         log_debug(f"Waiting {actual_delay:.2f} seconds before retry #{retry_count}")
                         time.sleep(actual_delay)
                         # Increase delay for next retry (exponential backoff)
-                        retry_delay *= 1.5
+                        retry_delay *= DEFAULT_BACKOFF_FACTOR
                     else:
                         total_duration = time.time() - start_time
                         log_error(f"Ollama failed after {total_duration:.2f} seconds with {max_retries} retries")
@@ -150,7 +156,7 @@ class AnalyzerService:
                 if retry_count <= max_retries:
                     time.sleep(retry_delay)
                     # Increase timeout for next retry
-                    timeout *= 1.5
+                    timeout *= DEFAULT_BACKOFF_FACTOR
                     log_debug(f"Increased timeout to {timeout} seconds for next attempt")
                 else:
                     total_duration = time.time() - start_time
@@ -165,10 +171,10 @@ class AnalyzerService:
                 retry_count += 1
                 if retry_count <= max_retries:
                     # Adding jitter to prevent thundering herd
-                    actual_delay = retry_delay * (0.9 + 0.2 * random.random())
+                    actual_delay = retry_delay * (RETRY_JITTER_MIN + RETRY_JITTER_MAX * random.random())
                     log_debug(f"Waiting {actual_delay:.2f} seconds before retry #{retry_count}")
                     time.sleep(actual_delay)
-                    retry_delay *= 1.5
+                    retry_delay *= DEFAULT_BACKOFF_FACTOR
                 else:
                     total_duration = time.time() - start_time
                     log_error(f"Connection errors persisted for {total_duration:.2f} seconds with {max_retries} retries")
@@ -182,7 +188,7 @@ class AnalyzerService:
                 retry_count += 1
                 if retry_count <= max_retries:
                     time.sleep(retry_delay)
-                    retry_delay *= 1.5
+                    retry_delay *= DEFAULT_BACKOFF_FACTOR
                 else:
                     total_duration = time.time() - start_time
                     return {
@@ -211,10 +217,10 @@ class AnalyzerService:
             prompt = CLAUDE_PROMPT
             
         try:
-            url = "https://api.anthropic.com/v1/messages"
+            url = CLAUDE_API_ENDPOINT
             headers = {
                 "x-api-key": self.api_key,
-                "anthropic-version": "2023-06-01",
+                "anthropic-version": CLAUDE_API_VERSION,
                 "content-type": "application/json"
             }
             
@@ -231,7 +237,7 @@ class AnalyzerService:
             if image_url:
                 try:
                     log_info(f"Downloading tweet image from: {image_url}")
-                    image_response = self.session.get(image_url, timeout=10)
+                    image_response = self.session.get(image_url, timeout=IMAGE_DOWNLOAD_TIMEOUT)
                     image_response.raise_for_status()
                     
                     # Get image mime type from response headers or infer from URL
@@ -273,11 +279,11 @@ class AnalyzerService:
                 "messages": [
                     {"role": "user", "content": content}
                 ],
-                "max_tokens": 300,
-                "temperature": 0.3
+                "max_tokens": AI_MAX_TOKENS,
+                "temperature": AI_TEMPERATURE
             }
-            
-            response = self.session.post(url, headers=headers, json=payload, timeout=15)
+
+            response = self.session.post(url, headers=headers, json=payload, timeout=CLAUDE_TIMEOUT)
             response.raise_for_status()
             result = response.json()
             
@@ -338,13 +344,13 @@ class AnalyzerService:
                     {"role": "system", "content": "You are an analyzer that evaluates content."},
                     {"role": "user", "content": f"{prompt}\n\nTweet: {text}"}
                 ],
-                "max_tokens": 300,
-                "temperature": 0.3
+                "max_tokens": AI_MAX_TOKENS,
+                "temperature": AI_TEMPERATURE
             }
-            
+
             log_info(f"Analyzing tweet with OpenAI-compatible API using model {model}")
-            
-            response = self.session.post(url, headers=headers, json=payload, timeout=30)
+
+            response = self.session.post(url, headers=headers, json=payload, timeout=OPENAI_TIMEOUT)
             response.raise_for_status()
             result = response.json()
             
@@ -405,11 +411,11 @@ class AnalyzerService:
             prompt = GEMINI_PROMPT
             
         try:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+            url = f"{GEMINI_API_BASE}/{GEMINI_MODEL}:generateContent"
             headers = {
                 "Content-Type": "application/json"
             }
-            
+
             payload = {
                 "contents": [{
                     "parts": [{
@@ -417,18 +423,18 @@ class AnalyzerService:
                     }]
                 }],
                 "generationConfig": {
-                    "temperature": 0.3,
-                    "maxOutputTokens": 300
+                    "temperature": AI_TEMPERATURE,
+                    "maxOutputTokens": AI_MAX_TOKENS
                 }
             }
-            
+
             log_info(f"Analyzing tweet with Gemini using model {GEMINI_MODEL}")
-            
+
             response = self.session.post(
-                f"{url}?key={GEMINI_API_KEY}", 
-                headers=headers, 
-                json=payload, 
-                timeout=30
+                f"{url}?key={GEMINI_API_KEY}",
+                headers=headers,
+                json=payload,
+                timeout=GEMINI_TIMEOUT
             )
             response.raise_for_status()
             result = response.json()

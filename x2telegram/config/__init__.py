@@ -2,6 +2,44 @@
 Configuration package for the x2telegram application.
 """
 
+from .constants import (
+    # Timeouts
+    DEFAULT_HTTP_TIMEOUT,
+    IMAGE_DOWNLOAD_TIMEOUT,
+    TELEGRAM_TIMEOUT,
+    OLLAMA_TIMEOUT,
+    CLAUDE_TIMEOUT,
+    OPENAI_TIMEOUT,
+    GEMINI_TIMEOUT,
+    RSS_TIMEOUT,
+    # Retry configuration
+    DEFAULT_MAX_RETRIES,
+    DEFAULT_RETRY_DELAY,
+    DEFAULT_BACKOFF_FACTOR,
+    RSS_MAX_RETRIES,
+    RETRY_JITTER_MIN,
+    RETRY_JITTER_MAX,
+    # Rate limiting
+    TELEGRAM_RATE_LIMIT,
+    RSS_RATE_LIMIT_WAIT,
+    # AI parameters
+    AI_MAX_TOKENS,
+    AI_TEMPERATURE,
+    AI_CONFIDENCE_THRESHOLD,
+    # Processing
+    DEFAULT_MAX_WORKERS,
+    DEFAULT_PENDING_LIMIT,
+    SEQUENTIAL_PROCESSING_DELAY,
+    # HTML parsing
+    DOM_TRAVERSAL_MAX_LEVELS,
+    # API versions
+    CLAUDE_API_VERSION,
+    # API endpoints
+    TELEGRAM_API_BASE,
+    CLAUDE_API_ENDPOINT,
+    GEMINI_API_BASE,
+)
+
 from .settings import (
     # Paths
     ROOT_DIR,

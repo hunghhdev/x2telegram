@@ -6,6 +6,7 @@ import os
 import re
 import sys
 from pathlib import Path
+from typing import Optional, List
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -44,7 +45,7 @@ DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
 # Auto-detect provider from API key format
-def _detect_ai_provider():
+def _detect_ai_provider() -> str:
     """Auto-detect AI provider from API key format."""
     explicit = os.environ.get("AI_PROVIDER", "").lower()
     if explicit:
@@ -131,7 +132,8 @@ NITTER_MIRRORS = [
 ]
 
 # Custom parser for NITTER_MIRRORS (dot-env doesn't handle multi-line arrays well)
-def parse_mirrors_from_env_file():
+def parse_mirrors_from_env_file() -> Optional[List[str]]:
+    """Parse Nitter mirrors from .env file."""
     env_path = Path(__file__).resolve().parent.parent.parent / ".env"
     if not env_path.exists():
         return None
@@ -154,8 +156,8 @@ def parse_mirrors_from_env_file():
 # Try to get mirrors from direct .env file parsing first
 custom_mirrors = parse_mirrors_from_env_file()
 
-def _log_stderr(msg):
-    """Simple stderr logging for config initialization (before logging is set up)."""
+def _log_stderr(msg: str) -> None:
+    """Simple stderr logging for config initialization."""
     print(f"[CONFIG] {msg}", file=sys.stderr)
 
 if custom_mirrors:

@@ -5,15 +5,18 @@ import os
 import requests
 import threading
 import time
-from collections import deque
 from typing import Dict, Any, Optional
 
-from ..config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+from ..config import (
+    TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID,
+    TELEGRAM_API_BASE, TELEGRAM_TIMEOUT, TELEGRAM_RATE_LIMIT,
+    DEFAULT_MAX_RETRIES, DEFAULT_RETRY_DELAY,
+)
 from ..utils import log_info, log_error, log_debug
 
-# Rate limit: Telegram allows ~30 messages per second to different chats
-# For same chat, limit is ~1 message per second
-DEFAULT_RATE_LIMIT = float(os.environ.get('TELEGRAM_RATE_LIMIT', '1.0'))  # seconds between messages
+# Allow environment override for rate limit
+_RATE_LIMIT = float(os.environ.get('TELEGRAM_RATE_LIMIT', str(TELEGRAM_RATE_LIMIT)))
+
 
 class TelegramService:
     """Service for sending messages to Telegram."""
@@ -28,15 +31,15 @@ class TelegramService:
         """
         self.bot_token = bot_token or TELEGRAM_BOT_TOKEN
         self.default_chat_id = default_chat_id or TELEGRAM_CHAT_ID
-        self.base_url = f"https://api.telegram.org/bot{self.bot_token}"
-        self.retry_count = 3
-        self.retry_delay = 2  # seconds
+        self.base_url = f"{TELEGRAM_API_BASE}{self.bot_token}"
+        self.retry_count = DEFAULT_MAX_RETRIES
+        self.retry_delay = DEFAULT_RETRY_DELAY
         
         # Connection pooling with requests.Session for better performance
         self.session = requests.Session()
         
         # Rate limiting
-        self.rate_limit = DEFAULT_RATE_LIMIT
+        self.rate_limit = _RATE_LIMIT
         self._last_send_time = 0
         self._rate_lock = threading.Lock()
     
@@ -85,7 +88,7 @@ class TelegramService:
         for attempt in range(self.retry_count):
             try:
                 log_info(f"Sending message to Telegram chat {chat_id} (attempt {attempt+1}/{self.retry_count})")
-                response = self.session.post(url, data=payload, timeout=10)
+                response = self.session.post(url, data=payload, timeout=TELEGRAM_TIMEOUT)
                 
                 if response.status_code == 200:
                     result = response.json()
@@ -130,23 +133,23 @@ class TelegramService:
         
         try:
             log_info(f"Sending photo to Telegram chat {chat_id}")
-            response = self.session.post(url, data=payload, timeout=10)
+            response = self.session.post(url, data=payload, timeout=TELEGRAM_TIMEOUT)
             return response.json()
         except Exception as e:
             log_error(f"Error sending photo to Telegram: {str(e)}")
             return {"ok": False, "error": str(e)}
-    
+
     def get_bot_info(self) -> Optional[Dict[str, Any]]:
         """
         Get information about the bot.
-        
+
         Returns:
             dict: Bot information from Telegram API
         """
         url = f"{self.base_url}/getMe"
-        
+
         try:
-            response = self.session.get(url, timeout=10)
+            response = self.session.get(url, timeout=TELEGRAM_TIMEOUT)
             result = response.json()
             if result.get("ok"):
                 return result.get("result")

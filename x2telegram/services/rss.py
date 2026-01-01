@@ -1,6 +1,6 @@
 """
 HTML scraping service for fetching tweets from Nitter pages.
-Despite the filename (kept for backward compatibility), this module 
+Despite the filename (kept for backward compatibility), this module
 now uses direct HTML scraping instead of RSS feeds.
 """
 import sys
@@ -12,7 +12,11 @@ from typing import List, Optional, Tuple, Dict, Any
 from bs4 import BeautifulSoup
 import re
 
-from ..config import NITTER_MIRRORS
+from ..config import (
+    NITTER_MIRRORS,
+    RSS_TIMEOUT, RSS_MAX_RETRIES, RSS_RATE_LIMIT_WAIT,
+    DOM_TRAVERSAL_MAX_LEVELS,
+)
 from ..core.models import Tweet
 from ..utils import log_info, log_error, log_debug
 
@@ -33,7 +37,7 @@ class RSSService:
     now uses direct HTML scraping instead of RSS feeds.
     """
     
-    def __init__(self, mirrors=None, timeout=60, retry_count=10):
+    def __init__(self, mirrors=None, timeout=RSS_TIMEOUT, retry_count=RSS_MAX_RETRIES):
         """
         Initialize the scraping service.
         
@@ -102,7 +106,7 @@ class RSSService:
             next_available_time = min(self.rate_limited_until.values())
             sleep_time = max(0, next_available_time - current_time) + 1
             
-            if sleep_time > 60:  # If we need to wait more than a minute
+            if sleep_time > RSS_RATE_LIMIT_WAIT:  # If we need to wait more than a minute
                 log_info(f"All mirrors rate limited, resetting list")
                 self.working_mirrors = self.mirrors.copy()
                 self.rate_limited_until = {}
@@ -114,7 +118,7 @@ class RSSService:
         
         return random.choice(available_mirrors)
     
-    def mark_rate_limited(self, mirror: str, retry_after: int = 60) -> None:
+    def mark_rate_limited(self, mirror: str, retry_after: int = RSS_RATE_LIMIT_WAIT) -> None:
         """
         Mark a mirror as rate limited.
         
@@ -165,7 +169,7 @@ class RSSService:
                 # Handle rate limiting
                 if response.status_code == 429:
                     log_error(f"Rate limited by {mirror} (HTTP 429)")
-                    retry_after = int(response.headers.get('Retry-After', 60))
+                    retry_after = int(response.headers.get('Retry-After', RSS_RATE_LIMIT_WAIT))
                     self.mark_rate_limited(mirror, retry_after)
                     if mirror in self.working_mirrors:
                         self.working_mirrors.remove(mirror)
@@ -439,7 +443,7 @@ class RSSService:
                             
                             # Find the closest container element
                             container = link
-                            for _ in range(5):  # Look up to 5 levels up
+                            for _ in range(DOM_TRAVERSAL_MAX_LEVELS):  # Look up DOM tree
                                 if container.parent:
                                     container = container.parent
                                     # Stop if we reach a good container element
