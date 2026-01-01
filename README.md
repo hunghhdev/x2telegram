@@ -15,6 +15,12 @@ x2telegram monitors Twitter/X profiles through RSS feeds provided by Nitter inst
 - SQLite database for persistent storage
 - Resilient RSS fetching with multiple Nitter mirrors
 - Customizable AI analysis prompts for tailored relevance detection
+- **Keyword/Regex filtering** - Include or exclude tweets based on keywords or regex patterns
+- **Duplicate detection** - Automatically skip duplicate content (retweets, quotes)
+- **Rate limiting** - Built-in Telegram rate limiting to avoid API limits
+- **Daemon mode** - Run as a background service with scheduled processing
+- **Concurrent processing** - Process multiple followers in parallel
+- **Health check** - Verify connectivity to all external services
 
 ## Project Structure
 
@@ -104,6 +110,34 @@ Example:
 AI_PROMPT="Analyze this tweet and provide a brief, thoughtful comment about it. Keep your response short and to the point."
 ```
 
+### Tweet Filtering
+
+Filter tweets using keywords or regex patterns:
+
+```bash
+# Only forward tweets containing these keywords (comma-separated, case-insensitive)
+FILTER_KEYWORDS_INCLUDE=bitcoin,crypto,ethereum
+
+# Skip tweets containing these keywords
+FILTER_KEYWORDS_EXCLUDE=ad,sponsor,promo,giveaway
+
+# Regex patterns for advanced filtering
+FILTER_REGEX_INCLUDE=\$[A-Z]{3,5}   # Match ticker symbols like $BTC
+FILTER_REGEX_EXCLUDE=^RT @          # Skip retweets
+```
+
+**Note:** If `FILTER_KEYWORDS_INCLUDE` is set, only tweets matching at least one keyword will be forwarded. Exclude filters always take priority.
+
+### Performance Settings
+
+```bash
+# Maximum concurrent workers for processing followers (default: 3)
+MAX_WORKERS=5
+
+# Rate limit for Telegram messages in seconds (default: 1.0)
+TELEGRAM_RATE_LIMIT=1.0
+```
+
 ## Usage
 
 ### Command-line Interface
@@ -131,13 +165,36 @@ python main.py disable-follower elonmusk
 
 # Run database maintenance
 python main.py maintenance
+
+# Check connectivity to external services
+python main.py health-check
+
+# Run as daemon (background service)
+python main.py daemon --interval 15
 ```
 
 ### Deployment Options
 
 You can deploy x2telegram in several ways depending on your needs:
 
-#### 1. Using Cron
+#### 1. Using Daemon Mode (Recommended)
+
+The simplest way to run x2telegram continuously:
+
+```bash
+# Run with default 15-minute interval
+python main.py daemon
+
+# Run with custom interval (5 minutes)
+python main.py daemon --interval 5
+```
+
+Features:
+- Graceful shutdown with Ctrl+C or SIGTERM
+- Automatic scheduling without cron
+- Detailed logging for each run
+
+#### 2. Using Cron
 
 Set up a cron job to run the script periodically:
 
@@ -199,6 +256,41 @@ Enable and start the timer:
 sudo systemctl enable x2telegram.timer
 sudo systemctl start x2telegram.timer
 ```
+
+#### 4. Using Daemon Mode with Systemd
+
+For long-running daemon mode with systemd:
+
+```ini
+[Unit]
+Description=X2Telegram Daemon
+After=network.target
+
+[Service]
+Type=simple
+User=youruser
+WorkingDirectory=/path/to/x2telegram
+ExecStart=/path/to/x2telegram/venv/bin/python main.py daemon --interval 15
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+## Health Check
+
+Verify all external services are working:
+
+```bash
+python main.py health-check
+```
+
+This checks:
+- Telegram Bot connectivity
+- AI Provider (Ollama or Claude)
+- Nitter mirrors availability
+- Database connection
 
 ## Development
 
