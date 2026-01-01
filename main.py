@@ -74,11 +74,37 @@ def run_health_check():
             all_ok = False
     elif AI_PROVIDER.lower() == 'claude':
         from x2telegram.config import CLAUDE_API_KEY
-        if CLAUDE_API_KEY and CLAUDE_API_KEY != 'your-key':
+        if CLAUDE_API_KEY and CLAUDE_API_KEY != 'your-key' and CLAUDE_API_KEY:
             print("  ✓ Claude API key configured")
         else:
             print("  ✗ Claude API key not configured")
             all_ok = False
+    elif AI_PROVIDER.lower() == 'openai':
+        from x2telegram.config import OPENAI_API_KEY, OPENAI_MODEL
+        if OPENAI_API_KEY:
+            print(f"  ✓ OpenAI API key configured")
+            print(f"  ✓ Model: {OPENAI_MODEL}")
+        else:
+            print("  ✗ OpenAI API key not configured")
+            all_ok = False
+    elif AI_PROVIDER.lower() == 'deepseek':
+        from x2telegram.config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
+        if DEEPSEEK_API_KEY:
+            print(f"  ✓ DeepSeek API key configured")
+            print(f"  ✓ Model: {DEEPSEEK_MODEL}")
+        else:
+            print("  ✗ DeepSeek API key not configured")
+            all_ok = False
+    elif AI_PROVIDER.lower() == 'gemini':
+        from x2telegram.config import GEMINI_API_KEY, GEMINI_MODEL
+        if GEMINI_API_KEY:
+            print(f"  ✓ Gemini API key configured")
+            print(f"  ✓ Model: {GEMINI_MODEL}")
+        else:
+            print("  ✗ Gemini API key not configured")
+            all_ok = False
+    else:
+        print(f"  ⚠ Unknown provider '{AI_PROVIDER}'")
     
     # Check Nitter Mirrors
     print(f"\n[Nitter Mirrors] ({len(NITTER_MIRRORS)} configured)")

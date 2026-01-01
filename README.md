@@ -86,16 +86,49 @@ Create a `.env` file based on `.env.example` with the following parameters:
 
 ### AI Configuration
 
-The app supports two AI providers for tweet analysis:
+**Simplest way:** Just set your API key - provider is auto-detected:
 
-1. **Ollama** (default, locally-hosted): 
-   - `OLLAMA_URL`: URL for the Ollama API server (default: http://localhost:11434)
-   - `OLLAMA_MODEL`: Model to use with Ollama (default: deepseek-r1)
+```bash
+# OpenAI (auto-detected from sk-xxx format)
+AI_API_KEY=sk-xxxxxxxxxxxxxxxx
 
-2. **Claude** (cloud-based):
-   - `ANTHROPIC_API_KEY`: Your Anthropic/Claude API key
-   - `CLAUDE_MODEL`: Claude model to use (default: claude-3-sonnet-20240229)
-   - Set `AI_PROVIDER=claude` to use Claude
+# Claude (auto-detected from sk-ant-xxx format)  
+AI_API_KEY=sk-ant-xxxxxxxxxxxxxxxx
+
+# DeepSeek
+DEEPSEEK_API_KEY=sk-xxxxxxxxxxxxxxxx
+
+# Google Gemini
+GEMINI_API_KEY=AIzaxxxxxxxxxxxxxxxx
+```
+
+**Or explicitly set the provider:**
+
+```bash
+AI_PROVIDER=openai    # aliases: gpt, gpt4, chatgpt
+AI_API_KEY=sk-xxx
+
+AI_PROVIDER=claude    # aliases: anthropic, sonnet
+AI_API_KEY=sk-ant-xxx
+
+AI_PROVIDER=deepseek  # aliases: ds
+AI_API_KEY=sk-xxx
+
+AI_PROVIDER=gemini    # aliases: google
+AI_API_KEY=AIza-xxx
+
+AI_PROVIDER=ollama    # aliases: local, llama (default, no API key needed)
+```
+
+#### Custom Models (optional)
+
+```bash
+OPENAI_MODEL=gpt-4o              # default: gpt-4o-mini
+CLAUDE_MODEL=claude-3-opus       # default: claude-3-5-sonnet-20241022
+DEEPSEEK_MODEL=deepseek-reasoner # default: deepseek-chat
+GEMINI_MODEL=gemini-1.5-pro      # default: gemini-1.5-flash
+OLLAMA_MODEL=llama3              # default: deepseek-r1
+```
 
 ### AI Prompt Customization
 
@@ -104,6 +137,9 @@ You can customize the prompts used for AI analysis:
 - `AI_PROMPT`: General prompt for all AI providers
 - `OLLAMA_PROMPT`: Specific prompt for Ollama (overrides AI_PROMPT)
 - `CLAUDE_PROMPT`: Specific prompt for Claude (overrides AI_PROMPT)
+- `OPENAI_PROMPT`: Specific prompt for OpenAI (overrides AI_PROMPT)
+- `DEEPSEEK_PROMPT`: Specific prompt for DeepSeek (overrides AI_PROMPT)
+- `GEMINI_PROMPT`: Specific prompt for Gemini (overrides AI_PROMPT)
 
 Example:
 ```

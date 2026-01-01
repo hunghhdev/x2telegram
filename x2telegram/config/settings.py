@@ -21,13 +21,80 @@ DATABASE_PATH = os.path.join(DATA_DIR, "tweets.db")
 # API tokens (override these from environment variables)
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "your-token")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "your-chat-id")
-CLAUDE_API_KEY = os.environ.get("CLAUDE_API_KEY", "your-key")
 
-# Ollama settings
+# =============================================================================
+# AI CONFIGURATION (User-friendly)
+# =============================================================================
+# Option 1: Just set your API key - provider auto-detected
+#   AI_API_KEY=sk-xxx        -> OpenAI
+#   AI_API_KEY=sk-ant-xxx    -> Claude  
+#   AI_API_KEY=sk-xxx (with DEEPSEEK_API_KEY) -> DeepSeek
+#
+# Option 2: Explicitly set provider
+#   AI_PROVIDER=openai|claude|deepseek|gemini|ollama
+# =============================================================================
+
+# Universal API key (auto-detects provider)
+AI_API_KEY = os.environ.get("AI_API_KEY", "")
+
+# Provider-specific API keys (override AI_API_KEY)
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+CLAUDE_API_KEY = os.environ.get("CLAUDE_API_KEY", "")
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+
+# Auto-detect provider from API key format
+def _detect_ai_provider():
+    """Auto-detect AI provider from API key format."""
+    explicit = os.environ.get("AI_PROVIDER", "").lower()
+    if explicit:
+        # Normalize common aliases
+        aliases = {
+            "gpt": "openai", "gpt4": "openai", "gpt-4": "openai", "chatgpt": "openai",
+            "anthropic": "claude", "sonnet": "claude", "opus": "claude",
+            "deep-seek": "deepseek", "ds": "deepseek",
+            "google": "gemini", "bard": "gemini",
+            "local": "ollama", "llama": "ollama"
+        }
+        return aliases.get(explicit, explicit)
+    
+    # Auto-detect from specific API keys first
+    if DEEPSEEK_API_KEY:
+        return "deepseek"
+    if GEMINI_API_KEY:
+        return "gemini"
+    if CLAUDE_API_KEY or (AI_API_KEY and AI_API_KEY.startswith("sk-ant-")):
+        return "claude"
+    if OPENAI_API_KEY or (AI_API_KEY and AI_API_KEY.startswith("sk-")):
+        return "openai"
+    
+    # Default to ollama (local, no API key needed)
+    return "ollama"
+
+AI_PROVIDER = _detect_ai_provider()
+
+# Apply AI_API_KEY to the detected provider if specific key not set
+if AI_API_KEY:
+    if AI_PROVIDER == "openai" and not OPENAI_API_KEY:
+        OPENAI_API_KEY = AI_API_KEY
+    elif AI_PROVIDER == "claude" and not CLAUDE_API_KEY:
+        CLAUDE_API_KEY = AI_API_KEY
+    elif AI_PROVIDER == "deepseek" and not DEEPSEEK_API_KEY:
+        DEEPSEEK_API_KEY = AI_API_KEY
+    elif AI_PROVIDER == "gemini" and not GEMINI_API_KEY:
+        GEMINI_API_KEY = AI_API_KEY
+
+# Ollama settings (local, no API key needed)
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "deepseek-r1")
-# Set to "ollama" to use locally hosted Ollama models or "claude" for Claude API
-AI_PROVIDER = os.environ.get("AI_PROVIDER", "ollama")
+
+# Model settings (with sensible defaults)
+CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-3-5-sonnet-20241022")
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
+DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
+DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
 
 # AI analysis prompts
 DEFAULT_AI_PROMPT = (
@@ -40,9 +107,9 @@ AI_PROMPT = os.environ.get("AI_PROMPT", DEFAULT_AI_PROMPT)
 # Provider-specific prompts (optional - if not set, AI_PROMPT will be used)
 OLLAMA_PROMPT = os.environ.get("OLLAMA_PROMPT", AI_PROMPT)
 CLAUDE_PROMPT = os.environ.get("CLAUDE_PROMPT", AI_PROMPT)
-
-# Claude model configuration
-CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-3-sonnet-20240229")
+OPENAI_PROMPT = os.environ.get("OPENAI_PROMPT", AI_PROMPT)
+DEEPSEEK_PROMPT = os.environ.get("DEEPSEEK_PROMPT", AI_PROMPT)
+GEMINI_PROMPT = os.environ.get("GEMINI_PROMPT", AI_PROMPT)
 
 # Processing settings
 MAX_TWEETS_PER_USER = int(os.environ.get("MAX_TWEETS_PER_USER", "10"))

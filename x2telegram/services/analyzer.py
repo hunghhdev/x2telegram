@@ -11,9 +11,17 @@ import time
 from typing import Dict, Any, List, Optional, Union, Callable
 
 from ..config import (
-    CLAUDE_API_KEY, OLLAMA_URL, OLLAMA_MODEL, 
-    AI_PROVIDER, CLAUDE_MODEL,
-    AI_PROMPT, OLLAMA_PROMPT, CLAUDE_PROMPT
+    AI_PROVIDER, AI_PROMPT,
+    # Ollama
+    OLLAMA_URL, OLLAMA_MODEL, OLLAMA_PROMPT,
+    # Claude
+    CLAUDE_API_KEY, CLAUDE_MODEL, CLAUDE_PROMPT,
+    # OpenAI
+    OPENAI_API_KEY, OPENAI_MODEL, OPENAI_BASE_URL, OPENAI_PROMPT,
+    # DeepSeek
+    DEEPSEEK_API_KEY, DEEPSEEK_MODEL, DEEPSEEK_BASE_URL, DEEPSEEK_PROMPT,
+    # Gemini
+    GEMINI_API_KEY, GEMINI_MODEL, GEMINI_PROMPT
 )
 from ..utils import log_info, log_error, log_debug
 
@@ -364,6 +372,166 @@ class AnalyzerService:
         except Exception as e:
             log_error(f"Error in Claude analysis: {str(e)}")
             return {"error": str(e), "analysis": f"Error: {str(e)}"}
+    
+    def analyze_with_openai(self, text: str, prompt: str = None, api_key: str = None, 
+                            base_url: str = None, model: str = None) -> Dict[str, Any]:
+        """
+        Analyze text using OpenAI-compatible API (OpenAI, DeepSeek, etc.).
+        
+        Args:
+            text (str): Text to analyze
+            prompt (str, optional): Custom prompt for the AI
+            api_key (str, optional): API key. Defaults to OPENAI_API_KEY
+            base_url (str, optional): Base URL for API. Defaults to OPENAI_BASE_URL
+            model (str, optional): Model to use. Defaults to OPENAI_MODEL
+            
+        Returns:
+            dict: AI analysis results
+        """
+        api_key = api_key or OPENAI_API_KEY
+        base_url = base_url or OPENAI_BASE_URL
+        model = model or OPENAI_MODEL
+        
+        if not api_key:
+            log_error("No OpenAI API key provided")
+            return {"error": "No API key", "analysis": "Error: No API key configured"}
+        
+        if not prompt:
+            prompt = OPENAI_PROMPT
+            
+        try:
+            url = f"{base_url}/chat/completions"
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            payload = {
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": "You are an analyzer that evaluates content."},
+                    {"role": "user", "content": f"{prompt}\n\nTweet: {text}"}
+                ],
+                "max_tokens": 300,
+                "temperature": 0.3
+            }
+            
+            log_info(f"Analyzing tweet with OpenAI-compatible API using model {model}")
+            
+            response = self.session.post(url, headers=headers, json=payload, timeout=30)
+            response.raise_for_status()
+            result = response.json()
+            
+            message_content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+            analysis = self._remove_thinking_section(message_content)
+            
+            log_debug(f"OpenAI analysis: {analysis}")
+            
+            return {
+                "analysis": analysis,
+                "model": model,
+                "provider": "openai"
+            }
+            
+        except Exception as e:
+            log_error(f"Error in OpenAI analysis: {str(e)}")
+            return {"error": str(e), "analysis": f"Error: {str(e)}"}
+    
+    def analyze_with_deepseek(self, text: str, prompt: str = None) -> Dict[str, Any]:
+        """
+        Analyze text using DeepSeek API (OpenAI-compatible).
+        
+        Args:
+            text (str): Text to analyze
+            prompt (str, optional): Custom prompt for the AI
+            
+        Returns:
+            dict: AI analysis results
+        """
+        if not prompt:
+            prompt = DEEPSEEK_PROMPT
+            
+        log_info("Using DeepSeek for tweet analysis")
+        return self.analyze_with_openai(
+            text, 
+            prompt=prompt,
+            api_key=DEEPSEEK_API_KEY,
+            base_url=DEEPSEEK_BASE_URL,
+            model=DEEPSEEK_MODEL
+        )
+    
+    def analyze_with_gemini(self, text: str, prompt: str = None) -> Dict[str, Any]:
+        """
+        Analyze text using Google Gemini API.
+        
+        Args:
+            text (str): Text to analyze
+            prompt (str, optional): Custom prompt for the AI
+            
+        Returns:
+            dict: AI analysis results
+        """
+        if not GEMINI_API_KEY:
+            log_error("No Gemini API key provided")
+            return {"error": "No API key", "analysis": "Error: No API key configured"}
+        
+        if not prompt:
+            prompt = GEMINI_PROMPT
+            
+        try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+            headers = {
+                "Content-Type": "application/json"
+            }
+            
+            payload = {
+                "contents": [{
+                    "parts": [{
+                        "text": f"{prompt}\n\nTweet: {text}"
+                    }]
+                }],
+                "generationConfig": {
+                    "temperature": 0.3,
+                    "maxOutputTokens": 300
+                }
+            }
+            
+            log_info(f"Analyzing tweet with Gemini using model {GEMINI_MODEL}")
+            
+            response = self.session.post(
+                f"{url}?key={GEMINI_API_KEY}", 
+                headers=headers, 
+                json=payload, 
+                timeout=30
+            )
+            response.raise_for_status()
+            result = response.json()
+            
+            # Extract text from Gemini response
+            candidates = result.get("candidates", [])
+            if candidates:
+                content = candidates[0].get("content", {})
+                parts = content.get("parts", [])
+                if parts:
+                    message_content = parts[0].get("text", "")
+                else:
+                    message_content = ""
+            else:
+                message_content = ""
+            
+            analysis = self._remove_thinking_section(message_content)
+            
+            log_debug(f"Gemini analysis: {analysis}")
+            
+            return {
+                "analysis": analysis,
+                "model": GEMINI_MODEL,
+                "provider": "gemini"
+            }
+            
+        except Exception as e:
+            log_error(f"Error in Gemini analysis: {str(e)}")
+            return {"error": str(e), "analysis": f"Error: {str(e)}"}
             
     def analyze_with_ai(self, text: str, prompt: str = None, image_url: str = None) -> Dict[str, Any]:
         """
@@ -377,17 +545,33 @@ class AnalyzerService:
         Returns:
             dict: AI analysis results with plain text analysis
         """
-        if self.provider.lower() == 'ollama':
+        provider = self.provider.lower()
+        
+        if provider == 'ollama':
             log_info("Using Ollama for tweet analysis")
-            # Ollama doesn't support image analysis, so we ignore the image_url
             if image_url:
                 log_info("Image analysis not supported by Ollama, analyzing text only")
             return self.analyze_with_ollama(text, prompt)
-        elif self.provider.lower() == 'claude':
+        elif provider == 'claude':
             log_info("Using Claude for tweet analysis")
             if image_url:
                 log_info(f"Including image in Claude analysis: {image_url}")
             return self.analyze_with_claude(text, prompt, image_url)
+        elif provider == 'openai':
+            log_info("Using OpenAI for tweet analysis")
+            if image_url:
+                log_info("Image analysis not yet implemented for OpenAI, analyzing text only")
+            return self.analyze_with_openai(text, prompt)
+        elif provider == 'deepseek':
+            log_info("Using DeepSeek for tweet analysis")
+            if image_url:
+                log_info("Image analysis not supported by DeepSeek, analyzing text only")
+            return self.analyze_with_deepseek(text, prompt)
+        elif provider == 'gemini':
+            log_info("Using Gemini for tweet analysis")
+            if image_url:
+                log_info("Image analysis not yet implemented for Gemini, analyzing text only")
+            return self.analyze_with_gemini(text, prompt)
         else:
             # Default to Ollama if provider is not recognized
             log_info(f"Unknown provider '{self.provider}', defaulting to Ollama for tweet analysis")
