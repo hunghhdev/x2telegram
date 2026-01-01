@@ -56,6 +56,9 @@ class RSSService:
         
         # Track which selectors work for which mirrors
         self.mirror_selectors = {}
+        
+        # Connection pooling with requests.Session for better performance
+        self.session = requests.Session()
     
     def get_random_user_agent(self) -> str:
         """Get a random user agent from the list."""
@@ -157,7 +160,7 @@ class RSSService:
                 headers = self.get_request_headers()
                 
                 # Fetch the HTML page
-                response = requests.get(url, timeout=self.timeout, headers=headers)
+                response = self.session.get(url, timeout=self.timeout, headers=headers)
                 
                 # Handle rate limiting
                 if response.status_code == 429:

@@ -3,13 +3,12 @@ Database module for the x2telegram application.
 """
 import sqlite3
 from sqlite3 import Error
-import logging
 from datetime import datetime
 import os
-import sys
 
 from ..config import DATABASE_PATH
 from ..core.models import Tweet, Follower
+from ..utils import log_info, log_error, log_debug
 
 class Database:
     """Database manager for the x2telegram application."""
@@ -31,20 +30,20 @@ class Database:
                 # Log whether we're creating a new file or connecting to existing one
                 file_exists = os.path.exists(self.db_path)
                 if not file_exists:
-                    print(f"Database file does not exist, will be created: {self.db_path}", file=sys.stderr)
+                    log_info(f"Database file does not exist, will be created: {self.db_path}")
             
             self.conn = sqlite3.connect(self.db_path)
-            print(f"Connected to database: {self.db_path}", file=sys.stderr)
+            log_info(f"Connected to database: {self.db_path}")
             return self.conn
         except Error as e:
-            print(f"Error connecting to database: {e}", file=sys.stderr)
+            log_error(f"Error connecting to database: {e}")
             return None
     
     def close(self):
         """Close the database connection."""
         if self.conn:
             self.conn.close()
-            print("Database connection closed", file=sys.stderr)
+            log_debug("Database connection closed")
     
     def __enter__(self):
         """Context manager entry."""
@@ -106,10 +105,10 @@ class Database:
             ''')
             
             self.conn.commit()
-            print("Database tables and indexes created successfully", file=sys.stderr)
+            log_info("Database tables and indexes created successfully")
             return True
         except Error as e:
-            print(f"Error creating tables: {e}", file=sys.stderr)
+            log_error(f"Error creating tables: {e}")
             return False
     
     # Follower Management Methods
@@ -123,16 +122,16 @@ class Database:
             cursor = self.conn.cursor()
             cursor.execute("INSERT INTO followers (username) VALUES (?)", (username,))
             self.conn.commit()
-            print(f"Added follower: {username}", file=sys.stderr)
+            log_info(f"Added follower: {username}")
             
             # Return a Follower object
             follower_id = cursor.lastrowid
             return Follower(id=follower_id, username=username, enabled=True)
         except sqlite3.IntegrityError:
-            print(f"Follower {username} already exists", file=sys.stderr)
+            log_error(f"Follower {username} already exists")
             return None
         except Error as e:
-            print(f"Error adding follower: {e}", file=sys.stderr)
+            log_error(f"Error adding follower: {e}")
             return None
     
     def remove_follower(self, username):
@@ -145,13 +144,13 @@ class Database:
             cursor.execute("DELETE FROM followers WHERE username = ?", (username,))
             self.conn.commit()
             if cursor.rowcount > 0:
-                print(f"Removed follower: {username}", file=sys.stderr)
+                log_info(f"Removed follower: {username}")
                 return True
             else:
-                print(f"Follower {username} not found", file=sys.stderr)
+                log_error(f"Follower {username} not found")
                 return False
         except Error as e:
-            print(f"Error removing follower: {e}", file=sys.stderr)
+            log_error(f"Error removing follower: {e}")
             return False
     
     def enable_follower(self, username, enabled=True):
@@ -166,13 +165,13 @@ class Database:
             self.conn.commit()
             if cursor.rowcount > 0:
                 status = "enabled" if enabled else "disabled"
-                print(f"{status.capitalize()} follower: {username}", file=sys.stderr)
+                log_info(f"{status.capitalize()} follower: {username}")
                 return True
             else:
-                print(f"Follower {username} not found", file=sys.stderr)
+                log_error(f"Follower {username} not found")
                 return False
         except Error as e:
-            print(f"Error updating follower status: {e}", file=sys.stderr)
+            log_error(f"Error updating follower status: {e}")
             return False
     
     def get_all_followers(self, enabled_only=True):
@@ -193,7 +192,7 @@ class Database:
                 followers.append(Follower(id=row[0], username=row[1], enabled=row[2]))
             return followers
         except Error as e:
-            print(f"Error getting followers: {e}", file=sys.stderr)
+            log_error(f"Error getting followers: {e}")
             return []
     
     # Tweet Management Methods
@@ -220,17 +219,17 @@ class Database:
             ))
             self.conn.commit()
             tweet_id = cursor.lastrowid
-            print(f"Stored tweet: {tweet.tweet_id}", file=sys.stderr)
+            log_debug(f"Stored tweet: {tweet.tweet_id}")
             
             # Clean up old tweets to keep only the most recent ones
             self.cleanup_old_tweets(follower_id)
             
             return tweet_id
         except sqlite3.IntegrityError:
-            print(f"Tweet {tweet.tweet_id} already exists", file=sys.stderr)
+            log_debug(f"Tweet {tweet.tweet_id} already exists")
             return None
         except Error as e:
-            print(f"Error storing tweet: {e}", file=sys.stderr)
+            log_error(f"Error storing tweet: {e}")
             return None
     
     def tweet_exists(self, tweet_id):
@@ -243,7 +242,7 @@ class Database:
             cursor.execute("SELECT 1 FROM tweets_cache WHERE tweet_id = ?", (tweet_id,))
             return cursor.fetchone() is not None
         except Error as e:
-            print(f"Error checking tweet existence: {e}", file=sys.stderr)
+            log_error(f"Error checking tweet existence: {e}")
             return False
     
     def update_analysis_result(self, tweet_id, analysis_result):
@@ -260,13 +259,13 @@ class Database:
             ''', (analysis_result, tweet_id))
             self.conn.commit()
             if cursor.rowcount > 0:
-                print(f"Updated analysis for tweet: {tweet_id}", file=sys.stderr)
+                log_debug(f"Updated analysis for tweet: {tweet_id}")
                 return True
             else:
-                print(f"Tweet {tweet_id} not found", file=sys.stderr)
+                log_error(f"Tweet {tweet_id} not found")
                 return False
         except Error as e:
-            print(f"Error updating analysis: {e}", file=sys.stderr)
+            log_error(f"Error updating analysis: {e}")
             return False
     
     def mark_as_sent(self, tweet_id):
@@ -283,13 +282,13 @@ class Database:
             ''', (datetime.now().isoformat(), tweet_id))
             self.conn.commit()
             if cursor.rowcount > 0:
-                print(f"Marked tweet {tweet_id} as sent to Telegram", file=sys.stderr)
+                log_debug(f"Marked tweet {tweet_id} as sent to Telegram")
                 return True
             else:
-                print(f"Tweet {tweet_id} not found", file=sys.stderr)
+                log_error(f"Tweet {tweet_id} not found")
                 return False
         except Error as e:
-            print(f"Error marking tweet as sent: {e}", file=sys.stderr)
+            log_error(f"Error marking tweet as sent: {e}")
             return False
     
     def get_unsent_analyzed_tweets(self, limit=10):
@@ -322,7 +321,7 @@ class Database:
                 tweets.append((tweet, row[0], row[6]))  # tweet, follower_id, analysis_result
             return tweets
         except Error as e:
-            print(f"Error getting unsent tweets: {e}", file=sys.stderr)
+            log_error(f"Error getting unsent tweets: {e}")
             return []
     
     def get_unanalyzed_tweets(self, limit=50):
@@ -354,7 +353,7 @@ class Database:
                 tweets.append((tweet, row[0]))  # tweet, follower_id
             return tweets
         except Error as e:
-            print(f"Error getting unanalyzed tweets: {e}", file=sys.stderr)
+            log_error(f"Error getting unanalyzed tweets: {e}")
             return []
     
     # Maintenance Methods
@@ -379,9 +378,8 @@ class Database:
             
             # If we have more tweets than the limit, cleanup is needed
             if total_tweets > keep_count:
-                print(f"Cleaning up old tweets for follower_id {follower_id}. "
-                      f"Total: {total_tweets}, keeping {keep_count} + sent tweets", 
-                      file=sys.stderr)
+                log_debug(f"Cleaning up old tweets for follower_id {follower_id}. "
+                          f"Total: {total_tweets}, keeping {keep_count} + sent tweets")
                 
                 # First, get IDs of tweets that have been sent to Telegram
                 cursor.execute('''
@@ -415,13 +413,12 @@ class Database:
                     
                     deleted_count = cursor.rowcount
                     self.conn.commit()
-                    print(f"Deleted {deleted_count} old tweets for follower_id {follower_id}", 
-                          file=sys.stderr)
+                    log_debug(f"Deleted {deleted_count} old tweets for follower_id {follower_id}")
                     return deleted_count
                 
             return 0  # No cleanup needed
         except Error as e:
-            print(f"Error cleaning up old tweets: {e}", file=sys.stderr)
+            log_error(f"Error cleaning up old tweets: {e}")
             return 0
     
     def run_maintenance(self):
@@ -430,7 +427,7 @@ class Database:
             self.connect()
         
         try:
-            print("Running database maintenance...", file=sys.stderr)
+            log_info("Running database maintenance...")
             cursor = self.conn.cursor()
             cursor.execute("SELECT id FROM followers")
             follower_ids = [row[0] for row in cursor.fetchall()]
@@ -440,10 +437,10 @@ class Database:
                 deleted = self.cleanup_old_tweets(follower_id)
                 total_deleted += deleted
             
-            print(f"Maintenance complete. Deleted {total_deleted} old tweets", file=sys.stderr)
+            log_info(f"Maintenance complete. Deleted {total_deleted} old tweets")
             return total_deleted
         except Error as e:
-            print(f"Error during maintenance: {e}", file=sys.stderr)
+            log_error(f"Error during maintenance: {e}")
             return 0
 
 def init_database(db_path=DATABASE_PATH):
@@ -453,5 +450,5 @@ def init_database(db_path=DATABASE_PATH):
         db.create_tables()
         return db
     else:
-        print("Error! Cannot create the database connection.", file=sys.stderr)
+        log_error("Error! Cannot create the database connection.")
         return None

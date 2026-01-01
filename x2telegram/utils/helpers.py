@@ -96,6 +96,55 @@ def retry_with_backoff(func, max_retries=3, initial_delay=1, backoff_factor=2):
             
     raise last_exception
 
+
+def retry_decorator(max_retries=3, initial_delay=1, backoff_factor=2, exceptions=(Exception,)):
+    """
+    Decorator for retrying a function with exponential backoff.
+    
+    Args:
+        max_retries (int): Maximum number of retry attempts
+        initial_delay (float): Initial delay between retries in seconds
+        backoff_factor (float): Multiplicative factor for backoff
+        exceptions (tuple): Tuple of exception types to catch and retry
+        
+    Returns:
+        Decorated function with retry logic
+        
+    Example:
+        @retry_decorator(max_retries=3, exceptions=(requests.RequestException,))
+        def fetch_data():
+            return requests.get(url)
+    """
+    import functools
+    import random
+    
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            retries = 0
+            delay = initial_delay
+            last_exception = None
+            
+            while retries <= max_retries:
+                try:
+                    return func(*args, **kwargs)
+                except exceptions as e:
+                    last_exception = e
+                    if retries == max_retries:
+                        break
+                    
+                    # Add jitter to prevent thundering herd
+                    jittered_delay = delay * (0.9 + 0.2 * random.random())
+                    log_info(f"Retry {retries+1}/{max_retries} for {func.__name__} "
+                             f"after {jittered_delay:.2f}s due to: {str(e)}")
+                    time.sleep(jittered_delay)
+                    delay *= backoff_factor
+                    retries += 1
+            
+            raise last_exception
+        return wrapper
+    return decorator
+
 def chunk_list(lst: List[Any], chunk_size: int) -> List[List[Any]]:
     """
     Split a list into chunks of specified size.

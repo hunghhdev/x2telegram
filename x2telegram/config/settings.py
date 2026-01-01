@@ -1,9 +1,10 @@
 """
 Settings module for the x2telegram application.
 """
+import json
 import os
-import sys
 import re
+import sys
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -75,28 +76,25 @@ def parse_mirrors_from_env_file():
 # Try to get mirrors from direct .env file parsing first
 custom_mirrors = parse_mirrors_from_env_file()
 
+def _log_stderr(msg):
+    """Simple stderr logging for config initialization (before logging is set up)."""
+    print(f"[CONFIG] {msg}", file=sys.stderr)
+
 if custom_mirrors:
     NITTER_MIRRORS = custom_mirrors
-    print(f"Using {len(NITTER_MIRRORS)} custom Nitter mirrors from .env file", file=sys.stderr)
-    # Print the first few mirrors to confirm correct parsing
-    for i, mirror in enumerate(NITTER_MIRRORS[:3]):
-        print(f"  Mirror {i+1}: {mirror}", file=sys.stderr)
-    if len(NITTER_MIRRORS) > 3:
-        print(f"  ...and {len(NITTER_MIRRORS) - 3} more", file=sys.stderr)
+    _log_stderr(f"Using {len(NITTER_MIRRORS)} custom Nitter mirrors from .env file")
 # Fallback to environment variable if direct parsing failed
 elif os.environ.get("NITTER_MIRRORS"):
     try:
-        import json
         # Try to parse as JSON (for simpler formats)
         mirrors_raw = os.environ.get("NITTER_MIRRORS", "[]")
         custom_mirrors = json.loads(mirrors_raw)
         if isinstance(custom_mirrors, list) and custom_mirrors:
             NITTER_MIRRORS = custom_mirrors
-            print(f"Using {len(NITTER_MIRRORS)} custom Nitter mirrors from environment variable", 
-                  file=sys.stderr)
+            _log_stderr(f"Using {len(NITTER_MIRRORS)} custom Nitter mirrors from environment variable")
     except Exception as e:
-        print(f"Error parsing NITTER_MIRRORS environment variable: {e}", file=sys.stderr)
-        print(f"Using default mirror: https://nitter.net", file=sys.stderr)
+        _log_stderr(f"Error parsing NITTER_MIRRORS environment variable: {e}")
+        _log_stderr("Using default mirror: https://nitter.net")
 
 # Ensure data directory exists
 os.makedirs(DATA_DIR, exist_ok=True)

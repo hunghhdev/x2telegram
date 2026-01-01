@@ -1,12 +1,13 @@
 """
 Service for analyzing tweets to determine relevance.
 """
-import re
-import requests
+import base64
 import json
 import os
-import time
 import random
+import re
+import requests
+import time
 from typing import Dict, Any, List, Optional, Union, Callable
 
 from ..config import (
@@ -44,6 +45,9 @@ class AnalyzerService:
         self.ollama_model = ollama_model or OLLAMA_MODEL
         self.keyword_filters = []
         self.regex_filters = []
+        
+        # Connection pooling with requests.Session for better performance
+        self.session = requests.Session()
         
     def add_keyword_filter(self, keyword: str, is_positive: bool = True):
         """
@@ -157,7 +161,7 @@ class AnalyzerService:
                 
                 # Log timing information for monitoring
                 request_start = time.time()
-                response = requests.post(url, headers=headers, json=payload, timeout=timeout)
+                response = self.session.post(url, headers=headers, json=payload, timeout=timeout)
                 request_duration = time.time() - request_start
                 log_debug(f"Ollama API call took {request_duration:.2f} seconds")
                 
@@ -293,7 +297,7 @@ class AnalyzerService:
             if image_url:
                 try:
                     log_info(f"Downloading tweet image from: {image_url}")
-                    image_response = requests.get(image_url, timeout=10)
+                    image_response = self.session.get(image_url, timeout=10)
                     image_response.raise_for_status()
                     
                     # Get image mime type from response headers or infer from URL
@@ -311,7 +315,6 @@ class AnalyzerService:
                             content_type = 'image/jpeg'  # Default to jpeg
                     
                     # Encode the image as base64
-                    import base64
                     image_data = base64.b64encode(image_response.content).decode('utf-8')
                     
                     # Add the image to the content
@@ -340,7 +343,7 @@ class AnalyzerService:
                 "temperature": 0.3
             }
             
-            response = requests.post(url, headers=headers, json=payload, timeout=15)
+            response = self.session.post(url, headers=headers, json=payload, timeout=15)
             response.raise_for_status()
             result = response.json()
             

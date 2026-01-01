@@ -25,6 +25,9 @@ class TelegramService:
         self.retry_count = 3
         self.retry_delay = 2  # seconds
         
+        # Connection pooling with requests.Session for better performance
+        self.session = requests.Session()
+        
     def send_message(self, text: str, chat_id=None, parse_mode="HTML", 
                      disable_web_page_preview=False) -> Dict[str, Any]:
         """
@@ -56,7 +59,7 @@ class TelegramService:
         for attempt in range(self.retry_count):
             try:
                 log_info(f"Sending message to Telegram chat {chat_id} (attempt {attempt+1}/{self.retry_count})")
-                response = requests.post(url, data=payload, timeout=10)
+                response = self.session.post(url, data=payload, timeout=10)
                 
                 if response.status_code == 200:
                     result = response.json()
@@ -98,7 +101,7 @@ class TelegramService:
         
         try:
             log_info(f"Sending photo to Telegram chat {chat_id}")
-            response = requests.post(url, data=payload, timeout=10)
+            response = self.session.post(url, data=payload, timeout=10)
             return response.json()
         except Exception as e:
             log_error(f"Error sending photo to Telegram: {str(e)}")
@@ -114,7 +117,7 @@ class TelegramService:
         url = f"{self.base_url}/getMe"
         
         try:
-            response = requests.get(url, timeout=10)
+            response = self.session.get(url, timeout=10)
             result = response.json()
             if result.get("ok"):
                 return result.get("result")
