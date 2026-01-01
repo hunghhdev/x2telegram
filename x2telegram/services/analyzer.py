@@ -51,83 +51,9 @@ class AnalyzerService:
         self.threshold = threshold
         self.ollama_url = ollama_url or OLLAMA_URL
         self.ollama_model = ollama_model or OLLAMA_MODEL
-        self.keyword_filters = []
-        self.regex_filters = []
         
         # Connection pooling with requests.Session for better performance
         self.session = requests.Session()
-        
-    def add_keyword_filter(self, keyword: str, is_positive: bool = True):
-        """
-        Add a keyword filter.
-        
-        Args:
-            keyword (str): Keyword to filter on
-            is_positive (bool, optional): If True, include tweets with this keyword. 
-                                         If False, exclude tweets with this keyword.
-                                         Defaults to True.
-        """
-        self.keyword_filters.append((keyword.lower(), is_positive))
-        
-    def add_regex_filter(self, pattern: str, is_positive: bool = True):
-        """
-        Add a regex filter.
-        
-        Args:
-            pattern (str): Regex pattern to filter on
-            is_positive (bool, optional): If True, include tweets matching this pattern. 
-                                         If False, exclude tweets matching this pattern.
-                                         Defaults to True.
-        """
-        try:
-            regex = re.compile(pattern, re.IGNORECASE)
-            self.regex_filters.append((regex, is_positive))
-        except re.error as e:
-            log_error(f"Invalid regex pattern '{pattern}': {str(e)}")
-    
-    def analyze_with_keywords(self, text: str) -> bool:
-        """
-        Analyze text using keyword filters.
-        
-        Args:
-            text (str): Text to analyze
-            
-        Returns:
-            bool: True if text passes all filters, False otherwise
-        """
-        text_lower = text.lower()
-        
-        # First, check exclusion filters (negative filters)
-        for keyword, is_positive in self.keyword_filters:
-            if not is_positive and keyword in text_lower:
-                log_debug(f"Text excluded by negative keyword filter: '{keyword}'")
-                return False
-                
-        for regex, is_positive in self.regex_filters:
-            if not is_positive and regex.search(text):
-                log_debug(f"Text excluded by negative regex filter: '{regex.pattern}'")
-                return False
-        
-        # If no exclusion filters matched, check inclusion filters
-        # If we have no inclusion filters, return True by default
-        has_inclusion_filters = any(is_positive for _, is_positive in self.keyword_filters + self.regex_filters)
-        
-        if not has_inclusion_filters:
-            return True
-            
-        # Check if any inclusion filter matches
-        for keyword, is_positive in self.keyword_filters:
-            if is_positive and keyword in text_lower:
-                log_debug(f"Text included by positive keyword filter: '{keyword}'")
-                return True
-                
-        for regex, is_positive in self.regex_filters:
-            if is_positive and regex.search(text):
-                log_debug(f"Text included by positive regex filter: '{regex.pattern}'")
-                return True
-                
-        # If we have inclusion filters but none matched, return False
-        return False
     
     def analyze_with_ollama(self, text: str, prompt: str = None, max_retries=3, retry_delay=2, timeout=30) -> Dict[str, Any]:
         """
